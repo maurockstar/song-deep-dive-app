@@ -98,40 +98,60 @@
     }
   }
 
+  // ---- local cache: a song you've already opened shows instantly and never re-calls the AI.
+  // Keyed by app version + song, so a new release (better AI prompt) doesn't reuse stale cards.
+  var CACHE_PREFIX = "sdd:cards:v" + ((CFG && CFG.VERSION) || "0") + ":";
+  function cacheKeyFor(track) {
+    return CACHE_PREFIX + ((track.title || "") + "|" + (track.artist || "")).toLowerCase().replace(/\s+/g, "_");
+  }
+  function cacheGet(track) {
+    try { var raw = localStorage.getItem(cacheKeyFor(track)); return raw ? JSON.parse(raw) : null; }
+    catch (e) { return null; }
+  }
+  function cacheSet(track, payload) {
+    try { localStorage.setItem(cacheKeyFor(track), JSON.stringify(payload)); }
+    catch (e) {
+      // storage full/unavailable — drop our old entries and retry once
+      try {
+        for (var i = localStorage.length - 1; i >= 0; i--) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf("sdd:cards:") === 0) localStorage.removeItem(k);
+        }
+        localStorage.setItem(cacheKeyFor(track), JSON.stringify(payload));
+      } catch (e2) { /* give up quietly — caching is best-effort */ }
+    }
+  }
+  function isAiPayload(p) {
+    return !!(p && p._meta && typeof p._meta.source === "string" && p._meta.source.indexOf("ai") === 0);
+  }
+
   async function loadDeepDive(track) {
     var mine = ++loadSeq; // anything older than this is stale once the track changes
+
+    // 1) Instant if we've already generated this song on this device (no network, no AI call).
+    var cached = cacheGet(track);
+    if (cached && cached.cards && cached.cards.length) { renderCards(cached); return; }
+
+    // 2) Otherwise hold skeletons until the AI cards are ready (no basic-then-AI swap).
     skeletonCards(4);
-    var q = new URLSearchParams({
+    var url = CFG.API_BASE + "/deepdive?" + new URLSearchParams({
       id: track.id || "",
       title: track.title || "",
       artist: track.artist || ""
-    });
-    var base = CFG.API_BASE + "/deepdive?" + q.toString();
+    }).toString();
     try {
-      // Phase 1 — open-data cards, returned instantly (no waiting on the AI).
-      var fastRes = await fetch(base + "&fast=1");
-      if (!fastRes.ok) throw new Error("api " + fastRes.status);
-      var fast = await fastRes.json();
+      var res = await fetch(url);
+      if (!res.ok) throw new Error("api " + res.status);
+      var data = await res.json();
       if (mine !== loadSeq) return;          // user already moved to another song
-      renderCards(fast);
-
-      // Phase 2 — if an AI upgrade is coming, fetch it and swap it in.
-      if (fast._meta && fast._meta.aiPending) {
-        setEnriching(true);
-        try {
-          var fullRes = await fetch(base);
-          if (fullRes.ok) {
-            var full = await fullRes.json();
-            if (mine !== loadSeq) return;
-            if (full && full.cards && full.cards.length) renderCards(full, true);
-          }
-        } catch (e2) { /* keep the open-data cards on any AI failure */ }
-        if (mine === loadSeq) setEnriching(false);
-      }
+      renderCards(data, true);
+      // Cache only real AI results — never lock in the open-data fallback, so a slow/failed
+      // AI run gets retried next time instead of being remembered as the final answer.
+      if (isAiPayload(data)) cacheSet(track, data);
     } catch (e) {
       if (mine !== loadSeq) return;
       console.error("deepdive failed", e);
-      els.deep.innerHTML = '<div class="empty"><h1>Hmm.</h1><p>Couldn\'t reach the deep-dive service. The API stub runs under <code>swa start</code> or once deployed to Azure.</p></div>';
+      els.deep.innerHTML = '<div class="empty"><h1>Hmm.</h1><p>Couldn\'t reach the deep-dive service. Try again in a moment.</p></div>';
     }
   }
 
