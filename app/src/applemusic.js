@@ -1,7 +1,17 @@
 // Song Deep Dive — Apple Music provider (MusicKit JS v3).
+//
 // Stays completely inert until /api/amtoken is configured server-side:
 // if there's no developer token, the Apple Music button never appears and
 // nothing here runs, so the existing Spotify / open-data app is untouched.
+//
+// Rebuilt to fix the "I click Allow but nothing happens" problem:
+//   • The button now reflects the REAL authorization state via MusicKit's
+//     authorizationStatusDidChange event — not a single success-path write
+//     that silently no-ops when authorize() rejects.
+//   • authorize() failures are classified and surfaced in the UI with an
+//     actionable reason (no Apple Music subscription, or the browser blocked
+//     the sign-in token), instead of being swallowed into console.warn.
+//   • On load we restore the connected state if a user token already exists.
 (function () {
   "use strict";
   var CFG = window.SDD_CONFIG || {};
@@ -10,8 +20,56 @@
   var storefront = "us";
   var lastId = null;
   var btn = null;
+  var notice = null;      // #appleNotice element (created if missing)
 
   function api(p) { return (CFG.API_BASE || "/api") + p; }
+
+  // ---- UI helpers -----------------------------------------------------------
+
+  function ensureNotice() {
+    if (notice) return notice;
+    notice = document.getElementById("appleNotice");
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.id = "appleNotice";
+      notice.className = "apple-notice hidden";
+      var main = document.querySelector("main.stage") || document.body;
+      main.insertBefore(notice, main.firstChild);
+    }
+    return notice;
+  }
+
+  function showNotice(html, kind) {
+    var n = ensureNotice();
+    n.className = "apple-notice " + (kind || "info");
+    n.innerHTML = html;
+    n.classList.remove("hidden");
+  }
+  function clearNotice() {
+    if (notice) { notice.classList.add("hidden"); notice.innerHTML = ""; }
+  }
+
+  function isAuthorized() {
+    return !!(music && music.isAuthorized);
+  }
+
+  // Single source of truth for what the button + status look like.
+  function refreshButton() {
+    if (!btn) return;
+    if (isAuthorized()) {
+      btn.textContent = "Apple Music ✓";
+      btn.classList.add("connected");
+      btn.onclick = disconnect;
+      if (ui) ui.setStatus("Apple Music connected", "ok");
+      clearNotice();
+    } else {
+      btn.textContent = "Connect Apple Music";
+      btn.classList.remove("connected");
+      btn.onclick = connect;
+    }
+  }
+
+  // ---- token + catalog ------------------------------------------------------
 
   async function fetchToken() {
     try {
@@ -22,11 +80,10 @@
     } catch (e) { return null; }
   }
 
-  // Load MusicKit JS from Apple's CDN (once) and configure it with our token.
   function loadAndConfigure(token) {
     return new Promise(function (resolve, reject) {
       function go() {
-        MusicKit.configure({ developerToken: token, app: { name: "Song Deep Dive", build: "0.3" } })
+        MusicKit.configure({ developerToken: token, app: { name: "Song Deep Dive", build: "0.4" } })
           .then(resolve).catch(reject);
       }
       if (window.MusicKit) { go(); return; }
@@ -60,13 +117,89 @@
     if (t && ui) ui.renderNowPlaying(t);
   }
 
-  async function connect() {
+  // ---- connect / diagnose ---------------------------------------------------
+
+  // Does the browser allow the cross-site cookies MusicKit's sign-in relies on?
+  // Best-effort: the Storage Access API is the most reliable signal we have.
+  async function thirdPartyCookiesLikelyBlocked() {
     try {
-      await music.authorize();
-      if (ui) ui.setStatus("Apple Music connected", "ok");
-      if (btn) btn.textContent = "Apple Music ✓";
-    } catch (e) { console.warn("apple authorize failed", e); }
+      if (document.hasStorageAccess) {
+        var has = await document.hasStorageAccess();
+        if (has === false) return true;
+      }
+    } catch (e) {}
+    return false; // unknown — don't over-claim
   }
+
+  // After a successful authorize, confirm whether the account can actually play
+  // (i.e. has an active Apple Music subscription) so we can tell the user.
+  async function checkSubscription() {
+    try {
+      var res = await music.api.music("v1/me/storefront");
+      // 200 means the user token is valid and accepted.
+      void res;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function connect() {
+    clearNotice();
+    if (ui) ui.setStatus("connecting to Apple Music…", "progress");
+    try {
+      await music.authorize();           // opens Apple sign-in popup
+    } catch (e) {
+      await explainAuthError(e);
+      refreshButton();
+      return;
+    }
+    // authorize() resolved. The event listener will also refreshButton(),
+    // but do it here too so we never depend on event timing.
+    refreshButton();
+    if (isAuthorized()) {
+      var ok = await checkSubscription();
+      if (!ok) {
+        showNotice(
+          "Signed in to Apple, but this Apple ID has <b>no active Apple Music subscription</b>, " +
+          "so full playback isn't available. Deep-dive cards and 30-second previews still work.",
+          "warn"
+        );
+      }
+    }
+  }
+
+  async function explainAuthError(e) {
+    var code = (e && (e.errorCode || e.name)) || "";
+    var msg = String((e && e.message) || e || "");
+    console.warn("apple authorize failed:", code, msg, e);
+
+    if (/AUTHORIZATION_ERROR|Unauthorized/i.test(code + " " + msg)) {
+      var blocked = await thirdPartyCookiesLikelyBlocked();
+      var reasons =
+        "<b>Apple wouldn't issue a sign-in token.</b> The two real causes:" +
+        "<ul>" +
+        "<li><b>No Apple Music subscription</b> on the Apple ID you used — MusicKit only grants a user token to active subscribers. " +
+        "Use an Apple ID with a live Apple Music plan (or start its free trial), then click Connect again.</li>" +
+        "<li><b>The browser blocked the sign-in cookie</b>" + (blocked ? " (detected here)" : "") +
+        ". In Chrome's address bar open the site settings (the icon left of the URL) → allow third-party cookies for this site, then retry.</li>" +
+        "</ul>";
+      showNotice(reasons, "error");
+      if (ui) ui.setStatus("Apple Music not connected", "");
+    } else {
+      showNotice("Couldn't connect to Apple Music: " + (msg || code || "unknown error") + ".", "error");
+      if (ui) ui.setStatus("Apple Music not connected", "");
+    }
+  }
+
+  async function disconnect() {
+    try { await music.unauthorize(); } catch (e) {}
+    lastId = null;
+    refreshButton();
+    if (ui) ui.setStatus(window.SDD && window.SDD.spotify && window.SDD.spotify.isConnected() ? "connected" : "ready", "");
+  }
+
+  // ---- catalog search / playback (unchanged behaviour) ----------------------
 
   async function search(term) {
     try {
@@ -83,6 +216,8 @@
     catch (e) { console.warn("apple play failed", e); return false; }
   }
 
+  // ---- init -----------------------------------------------------------------
+
   async function init(uiHelpers) {
     ui = uiHelpers;
     btn = document.getElementById("appleBtn");
@@ -93,13 +228,17 @@
       try { if (music.storefrontId) storefront = music.storefrontId; } catch (e) {}
       music.addEventListener("nowPlayingItemDidChange", onNowPlaying);
       music.addEventListener("playbackStateDidChange", onState);
+      // The key fix: reflect authorization state whenever MusicKit changes it,
+      // so the button is always correct regardless of how/when auth resolves.
+      music.addEventListener("authorizationStatusDidChange", refreshButton);
     } catch (e) { console.warn("apple init failed", e); return false; }
-    if (btn) { btn.classList.remove("hidden"); btn.onclick = connect; }
+    if (btn) btn.classList.remove("hidden");
+    refreshButton();           // restores "Apple Music ✓" if a token already exists
     AM.ready = true;
     return true;
   }
 
-  var AM = { ready: false, init: init, playQuery: playQuery, isAuthorized: function () { return !!(music && music.isAuthorized); } };
+  var AM = { ready: false, init: init, playQuery: playQuery, connect: connect, disconnect: disconnect, isAuthorized: isAuthorized };
   window.SDD = window.SDD || {};
   window.SDD.appleMusic = AM;
 })();
