@@ -1,5 +1,5 @@
 // Song Deep Dive — app bootstrap & UI wiring
-// v0.6
+// v0.7
 (function () {
   "use strict";
   var CFG = window.SDD_CONFIG;

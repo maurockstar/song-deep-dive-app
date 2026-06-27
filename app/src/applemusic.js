@@ -83,7 +83,7 @@
   function loadAndConfigure(token) {
     return new Promise(function (resolve, reject) {
       function go() {
-        MusicKit.configure({ developerToken: token, app: { name: "Song Deep Dive", build: "0.6" } })
+        MusicKit.configure({ developerToken: token, app: { name: "Song Deep Dive", build: "0.7" } })
           .then(resolve).catch(reject);
       }
       if (window.MusicKit) { go(); return; }
