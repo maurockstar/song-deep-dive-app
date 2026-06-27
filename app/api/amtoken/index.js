@@ -23,8 +23,19 @@ function b64url(input) {
 
 function normalizeKey(k) {
   if (!k) return k;
-  // Allow the key to be pasted as a single line with literal \n sequences.
-  return k.indexOf("\\n") !== -1 ? k.replace(/\\n/g, "\n") : k;
+  // Be tolerant of however the .p8 arrived: literal "\n", collapsed newlines
+  // (pasting multi-line text into a single-line field turns line breaks into
+  // spaces or removes them), CRLF, etc. Rebuild a clean PKCS8 PEM.
+  if (k.indexOf("\\n") !== -1) k = k.replace(/\\n/g, "\n");
+  const m = k.match(/-----BEGIN [^-]+-----([\s\S]*?)-----END [^-]+-----/);
+  if (m) {
+    const b64 = m[1].replace(/[^A-Za-z0-9+/=]/g, ""); // keep only base64 chars
+    if (b64) {
+      const wrapped = b64.match(/.{1,64}/g).join("\n");
+      return "-----BEGIN PRIVATE KEY-----\n" + wrapped + "\n-----END PRIVATE KEY-----\n";
+    }
+  }
+  return k;
 }
 
 function mintToken(privateKeyPem, keyId, teamId, ttlSeconds) {
