@@ -16,12 +16,14 @@
     empty: document.getElementById("emptyState"),
     manualInput: document.getElementById("manualInput"),
     manualBtn: document.getElementById("manualBtn"),
+    suggest: document.getElementById("suggestList"),
     status: document.getElementById("status"),
     tpl: document.getElementById("cardTpl")
   };
 
   var lastTrackId = null;
   var pollTimer = null;
+  var loadSeq = 0; // bumps on every new deep dive so stale responses can't overwrite fresh ones
 
   function setStatus(text, cls) {
     els.status.textContent = text;
@@ -63,7 +65,12 @@
     }
   }
 
-  function renderCards(payload) {
+  function setEnriching(on) {
+    if (on) setStatus("enriching with AI…", "progress");
+    else setStatus(S.isConnected() ? "connected" : "ready", S.isConnected() ? "ok" : "");
+  }
+
+  function renderCards(payload, animate) {
     els.deep.innerHTML = "";
     var cards = (payload && payload.cards) || [];
     if (!cards.length) {
@@ -75,33 +82,52 @@
       node.querySelector(".card-kicker").textContent = c.kicker || "";
       node.querySelector(".card-title").textContent = c.title || "";
       node.querySelector(".card-body").textContent = c.body || "";
-      var more = node.querySelector(".card-more");
       var extra = node.querySelector(".card-extra");
-      if (c.extra) {
-        extra.textContent = c.extra;
-        more.onclick = function () {
-          extra.classList.toggle("hidden");
-          more.textContent = extra.classList.contains("hidden") ? "Go deeper ↓" : "Show less ↑";
-        };
-      } else {
-        more.remove();
-      }
+      if (c.extra) { extra.textContent = c.extra; }
+      else if (extra) { extra.remove(); }
       els.deep.appendChild(node);
     });
+    if (animate) {
+      els.deep.style.opacity = "0";
+      els.deep.style.transition = "opacity .35s ease";
+      requestAnimationFrame(function () { els.deep.style.opacity = "1"; });
+    } else {
+      els.deep.style.opacity = "1";
+    }
   }
 
   async function loadDeepDive(track) {
+    var mine = ++loadSeq; // anything older than this is stale once the track changes
     skeletonCards(4);
     var q = new URLSearchParams({
       id: track.id || "",
       title: track.title || "",
       artist: track.artist || ""
     });
+    var base = CFG.API_BASE + "/deepdive?" + q.toString();
     try {
-      var res = await fetch(CFG.API_BASE + "/deepdive?" + q.toString());
-      if (!res.ok) throw new Error("api " + res.status);
-      renderCards(await res.json());
+      // Phase 1 — open-data cards, returned instantly (no waiting on the AI).
+      var fastRes = await fetch(base + "&fast=1");
+      if (!fastRes.ok) throw new Error("api " + fastRes.status);
+      var fast = await fastRes.json();
+      if (mine !== loadSeq) return;          // user already moved to another song
+      renderCards(fast);
+
+      // Phase 2 — if an AI upgrade is coming, fetch it and swap it in.
+      if (fast._meta && fast._meta.aiPending) {
+        setEnriching(true);
+        try {
+          var fullRes = await fetch(base);
+          if (fullRes.ok) {
+            var full = await fullRes.json();
+            if (mine !== loadSeq) return;
+            if (full && full.cards && full.cards.length) renderCards(full, true);
+          }
+        } catch (e2) { /* keep the open-data cards on any AI failure */ }
+        if (mine === loadSeq) setEnriching(false);
+      }
     } catch (e) {
+      if (mine !== loadSeq) return;
       console.error("deepdive failed", e);
       els.deep.innerHTML = '<div class="empty"><h1>Hmm.</h1><p>Couldn\'t reach the deep-dive service. The API stub runs under <code>swa start</code> or once deployed to Azure.</p></div>';
     }
@@ -124,24 +150,95 @@
     pollTimer = setInterval(poll, CFG.POLL_MS);
   }
 
-  // Manual fallback: dive into a typed song (no player needed)
-  function manualDive() {
-    var q = (els.manualInput.value || "").trim();
-    if (!q) return;
+  // Manual fallback: dive into a song (typed, or chosen from suggestions)
+  function diveWith(title, artist, art) {
+    title = (title || "").trim();
+    if (!title) return;
+    hideSuggest();
     // If Apple Music is connected, actually play the song too (then show its deep dive).
     var AM = window.SDD && window.SDD.appleMusic;
+    var playTerm = artist ? (title + " " + artist) : title;
     if (AM && AM.ready && AM.isAuthorized && AM.isAuthorized()) {
-      try { AM.playQuery(q); } catch (e) { /* fall through to cards-only */ }
+      try { AM.playQuery(playTerm); } catch (e) { /* fall through to cards-only */ }
     }
-    lastTrackId = "manual:" + q;
-    renderNowPlaying({ title: q, artist: "manual search", art: "", isPlaying: false });
-    loadDeepDive({ id: "", title: q, artist: "" });
+    lastTrackId = "manual:" + title + "|" + (artist || "");
+    renderNowPlaying({ title: title, artist: artist || "manual search", art: art || "", isPlaying: false });
+    loadDeepDive({ id: "", title: title, artist: artist || "" });
+  }
+  function manualDive() { diveWith(els.manualInput.value, "", ""); }
+
+  // ---- Type-ahead suggestions (free iTunes Search via /api/suggest) ----
+  var suggestTimer = null, suggestItems = [], activeIdx = -1;
+
+  function hideSuggest() {
+    if (!els.suggest) return;
+    els.suggest.classList.add("hidden");
+    els.suggest.innerHTML = "";
+    suggestItems = []; activeIdx = -1;
+    els.manualInput.setAttribute("aria-expanded", "false");
+  }
+  function renderSuggest(items) {
+    suggestItems = items; activeIdx = -1;
+    if (!items.length) { hideSuggest(); return; }
+    els.suggest.innerHTML = "";
+    items.forEach(function (it) {
+      var li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.innerHTML = '<img alt="" /><div class="s-meta"><div class="s-title"></div><div class="s-artist"></div></div>';
+      li.querySelector("img").src = it.art || "";
+      li.querySelector(".s-title").textContent = it.title;
+      li.querySelector(".s-artist").textContent = it.artist;
+      li.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        els.manualInput.value = it.title;
+        diveWith(it.title, it.artist, it.art);
+      });
+      els.suggest.appendChild(li);
+    });
+    els.suggest.classList.remove("hidden");
+    els.manualInput.setAttribute("aria-expanded", "true");
+  }
+  function highlight(idx) {
+    var lis = els.suggest.querySelectorAll("li");
+    for (var i = 0; i < lis.length; i++) lis[i].classList.toggle("active", i === idx);
+  }
+  async function fetchSuggest(term) {
+    try {
+      var res = await fetch(CFG.API_BASE + "/suggest?term=" + encodeURIComponent(term));
+      if (!res.ok) return;
+      var data = await res.json();
+      if ((els.manualInput.value || "").trim() === term) renderSuggest((data && data.suggestions) || []);
+    } catch (e) { /* silent — typing keeps working without suggestions */ }
+  }
+  function onManualInput() {
+    var term = (els.manualInput.value || "").trim();
+    if (suggestTimer) clearTimeout(suggestTimer);
+    if (term.length < 2) { hideSuggest(); return; }
+    suggestTimer = setTimeout(function () { fetchSuggest(term); }, 250);
+  }
+  function onManualKey(e) {
+    var open = els.suggest && !els.suggest.classList.contains("hidden");
+    if (!open) { if (e.key === "Enter") manualDive(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, suggestItems.length - 1); highlight(activeIdx); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); highlight(activeIdx); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      if (activeIdx >= 0 && suggestItems[activeIdx]) {
+        var it = suggestItems[activeIdx];
+        els.manualInput.value = it.title;
+        diveWith(it.title, it.artist, it.art);
+      } else { manualDive(); }
+    } else if (e.key === "Escape") { hideSuggest(); }
   }
 
   async function init() {
     refreshConnectButton();
     els.manualBtn.onclick = manualDive;
-    els.manualInput.addEventListener("keydown", function (e) { if (e.key === "Enter") manualDive(); });
+    els.manualInput.addEventListener("input", onManualInput);
+    els.manualInput.addEventListener("keydown", onManualKey);
+    document.addEventListener("click", function (e) {
+      if (els.suggest && !els.suggest.contains(e.target) && e.target !== els.manualInput) hideSuggest();
+    });
 
     var didLogin = await S.handleRedirect();
     if (didLogin) refreshConnectButton();

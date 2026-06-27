@@ -46,7 +46,11 @@
 
     <!-- Manual fallback -->
     <section class="manual">
-      <input id="manualInput" type="text" placeholder="Or search a song to dive into…" autocomplete="off" />
+      <div class="manual-search">
+        <input id="manualInput" type="text" placeholder="Or search a song to dive into…" autocomplete="off"
+               role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestList" />
+        <ul id="suggestList" class="suggest hidden" role="listbox" aria-label="Song suggestions"></ul>
+      </div>
       <button id="manualBtn" class="btn-ghost">Dive</button>
     </section>
 
@@ -69,9 +73,10 @@
     <article class="card" tabindex="0">
       <div class="card-kicker"></div>
       <h2 class="card-title"></h2>
-      <p class="card-body"></p>
-      <button class="card-more">Go deeper ↓</button>
-      <div class="card-extra hidden"></div>
+      <div class="card-scroll">
+        <p class="card-body"></p>
+        <div class="card-extra"></div>
+      </div>
     </article>
   </template>
 
