@@ -19,5 +19,5 @@ window.SDD_CONFIG = {
   API_BASE: "/api",
 
   // App version — single source of truth, shown in the footer.
-  VERSION: "0.5"
+  VERSION: "0.6"
 };
