@@ -1,5 +1,5 @@
 // Song Deep Dive — app bootstrap & UI wiring
-// build 0.4.2 — hands-off deploy test (comment-only, no behavior change)
+// v0.5
 (function () {
   "use strict";
   var CFG = window.SDD_CONFIG;
@@ -240,6 +240,8 @@
 
   async function init() {
     refreshConnectButton();
+    var verEl = document.getElementById("appVersion");
+    if (verEl && CFG.VERSION) verEl.textContent = "Song Deep Dive · v" + CFG.VERSION;
     els.manualBtn.onclick = manualDive;
     els.manualInput.addEventListener("input", onManualInput);
     els.manualInput.addEventListener("keydown", onManualKey);

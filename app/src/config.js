@@ -16,5 +16,8 @@ window.SDD_CONFIG = {
   POLL_MS: 4000,
 
   // API base for the deep-dive endpoint (Azure Functions; same origin in SWA).
-  API_BASE: "/api"
+  API_BASE: "/api",
+
+  // App version — single source of truth, shown in the footer.
+  VERSION: "0.5"
 };
