@@ -5,6 +5,7 @@
   var CFG = window.SDD_CONFIG;
   var S = window.SDD.spotify;
   var P = window.SDD.player;
+  var i18n = window.SDD && window.SDD.i18n;
 
   var els = {
     connect: document.getElementById("connectBtn"),
@@ -15,11 +16,15 @@
     state: document.getElementById("npState"),
     deep: document.getElementById("deepDive"),
     empty: document.getElementById("emptyState"),
+    emptyH1: document.getElementById("emptyH1"),
+    emptyP: document.getElementById("emptyP"),
     manualInput: document.getElementById("manualInput"),
     manualBtn: document.getElementById("manualBtn"),
     suggest: document.getElementById("suggestList"),
     status: document.getElementById("status"),
-    tpl: document.getElementById("cardTpl")
+    tpl: document.getElementById("cardTpl"),
+    langSelector: document.getElementById("langSelector"),
+    brandName: document.getElementById("brandName")
   };
 
   var lastPlayingId = null;   // last Spotify track id the poller has seen (for change detection)
@@ -34,13 +39,13 @@
 
   function refreshConnectButton() {
     if (S.isConnected()) {
-      els.connect.textContent = "Connected ✓";
+      els.connect.textContent = i18n.t("btn.connected");
       els.connect.onclick = function () { S.logout(); location.reload(); };
-      setStatus("connected", "ok");
+      setStatus(i18n.t("status.connected"), "ok");
     } else {
-      els.connect.textContent = "Connect Spotify";
+      els.connect.textContent = i18n.t("btn.connectSpotify");
       els.connect.onclick = function () { S.login(); };
-      setStatus("not connected");
+      setStatus(i18n.t("status.notConnected"));
     }
   }
 
@@ -53,7 +58,7 @@
     els.art.src = track.art || "";
     els.title.textContent = track.title;
     els.artist.textContent = track.artist;
-    els.state.textContent = track.isPlaying ? "▶ playing" : "❚❚ paused";
+    els.state.textContent = track.isPlaying ? i18n.t("state.playing") : i18n.t("state.paused");
   }
 
   function skeletonCards(n) {
@@ -62,21 +67,21 @@
     for (var i = 0; i < n; i++) {
       var d = document.createElement("div");
       d.className = "card skeleton";
-      d.innerHTML = '<div class="card-kicker">loading</div><h2 class="card-title">Gathering the story…</h2><p class="card-body">one moment</p>';
+      d.innerHTML = '<div class="card-kicker">' + i18n.t("skeleton.kicker") + '</div><h2 class="card-title">' + i18n.t("skeleton.title") + '</h2><p class="card-body">' + i18n.t("skeleton.body") + '</p>';
       els.deep.appendChild(d);
     }
   }
 
   function setEnriching(on) {
-    if (on) setStatus("enriching with AI…", "progress");
-    else setStatus(S.isConnected() ? "connected" : "ready", S.isConnected() ? "ok" : "");
+    if (on) setStatus(i18n.t("status.enriching"), "progress");
+    else setStatus(S.isConnected() ? i18n.t("status.connected") : i18n.t("status.ready"), S.isConnected() ? "ok" : "");
   }
 
   function renderCards(payload, animate) {
     els.deep.innerHTML = "";
     var cards = (payload && payload.cards) || [];
     if (!cards.length) {
-      els.deep.innerHTML = '<div class="empty"><h1>No deep dive yet</h1><p>We couldn\'t assemble this one. Try another song.</p></div>';
+      els.deep.innerHTML = '<div class="empty"><h1>' + i18n.t("empty.noResults.h1") + '</h1><p>' + i18n.t("empty.noResults.p") + '</p></div>';
       return;
     }
     cards.forEach(function (c) {
@@ -151,7 +156,7 @@
     } catch (e) {
       if (mine !== loadSeq) return;
       console.error("deepdive failed", e);
-      els.deep.innerHTML = '<div class="empty"><h1>Hmm.</h1><p>Couldn\'t reach the deep-dive service. Try again in a moment.</p></div>';
+      els.deep.innerHTML = '<div class="empty"><h1>' + i18n.t("empty.error.h1") + '</h1><p>' + i18n.t("empty.error.p") + '</p></div>';
     }
   }
 
@@ -258,10 +263,45 @@
     } else if (e.key === "Escape") { hideSuggest(); }
   }
 
+  function updateUIText() {
+    if (i18n) {
+      // Update brand name
+      if (els.brandName) els.brandName.textContent = i18n.t("brand.name");
+
+      // Update manual input placeholder
+      if (els.manualInput) els.manualInput.placeholder = i18n.t("search.placeholder");
+
+      // Update manual button
+      if (els.manualBtn) els.manualBtn.textContent = i18n.t("btn.dive");
+
+      // Update empty state
+      if (els.emptyH1) els.emptyH1.textContent = i18n.t("empty.welcome.h1");
+      if (els.emptyP) els.emptyP.textContent = i18n.t("empty.welcome.p");
+
+      // Update version
+      var verEl = document.getElementById("appVersion");
+      if (verEl && CFG.VERSION) verEl.textContent = i18n.t("version") + CFG.VERSION;
+
+      // Update connect button
+      refreshConnectButton();
+    }
+  }
+
   async function init() {
+    // Set initial language and update UI
+    if (i18n) {
+      i18n.setLanguage(i18n.getLanguage());
+      updateUIText();
+      if (els.langSelector) {
+        els.langSelector.value = i18n.getLanguage();
+        els.langSelector.addEventListener("change", function (e) {
+          i18n.setLanguage(e.target.value);
+          updateUIText();
+        });
+      }
+    }
+
     refreshConnectButton();
-    var verEl = document.getElementById("appVersion");
-    if (verEl && CFG.VERSION) verEl.textContent = "Song Deep Dive · v" + CFG.VERSION;
     els.manualBtn.onclick = manualDive;
     els.manualInput.addEventListener("input", onManualInput);
     els.manualInput.addEventListener("keydown", onManualKey);
@@ -275,7 +315,7 @@
 
     // Apple Music — inert unless /api/amtoken is configured (server-side MusicKit key).
     window.SDD = window.SDD || {};
-    window.SDD.ui = { renderNowPlaying: renderNowPlaying, loadDeepDive: loadDeepDive, setStatus: setStatus };
+    window.SDD.ui = { renderNowPlaying: renderNowPlaying, loadDeepDive: loadDeepDive, setStatus: setStatus, onLanguageChange: updateUIText };
     if (window.SDD.appleMusic && window.SDD.appleMusic.init) {
       try { await window.SDD.appleMusic.init(window.SDD.ui); } catch (e) { console.warn("apple init", e); }
     }

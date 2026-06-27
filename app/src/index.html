@@ -11,6 +11,8 @@
     .btn-primary.alt { background:linear-gradient(135deg,#fa2d48,#fb5c74); }
     .btn-primary.hidden { display:none; }
     .btn-primary.connected { filter:saturate(.7) brightness(1.05); }
+    .lang-selector { background:#0c1620; border:1px solid rgba(29,185,84,.3); color:var(--text); padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; }
+    .lang-selector:hover { border-color:var(--green); }
     .apple-notice { margin:0 0 14px; padding:12px 14px; border-radius:12px; font-size:14px; line-height:1.45;
       border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); }
     .apple-notice.hidden { display:none; }
@@ -25,9 +27,13 @@
   <header class="topbar">
     <div class="brand">
       <span class="logo" aria-hidden="true"></span>
-      <span class="name">Song Deep Dive</span>
+      <span class="name" id="brandName">Song Deep Dive</span>
     </div>
     <div class="connects">
+      <select id="langSelector" class="lang-selector" aria-label="Select language">
+        <option value="en">English</option>
+        <option value="es">Español</option>
+      </select>
       <button id="connectBtn" class="btn-primary">Connect Spotify</button>
       <button id="appleBtn" class="btn-primary alt hidden">Connect Apple Music</button>
     </div>
@@ -51,14 +57,14 @@
                role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestList" />
         <ul id="suggestList" class="suggest hidden" role="listbox" aria-label="Song suggestions"></ul>
       </div>
-      <button id="manualBtn" class="btn-ghost">Dive</button>
+      <button id="manualBtn" class="btn-ghost" data-i18n="btn.dive">Dive</button>
     </section>
 
     <!-- Deep dive -->
     <section id="deepDive" class="cards" aria-live="polite">
       <div class="empty" id="emptyState">
-        <h1>Geek out about the music you love.</h1>
-        <p>Connect Spotify (or search a song) and we'll surface the story behind it, who made it, and how it connects to everything else.</p>
+        <h1 id="emptyH1">Geek out about the music you love.</h1>
+        <p id="emptyP">Connect Spotify (or search a song) and we'll surface the story behind it, who made it, and how it connects to everything else.</p>
       </div>
     </section>
   </main>
@@ -81,6 +87,7 @@
   </template>
 
   <script src="./config.js"></script>
+  <script src="./i18n.js"></script>
   <script src="./spotify.js"></script>
   <script src="./applemusic.js"></script>
   <script src="./app.js"></script>
