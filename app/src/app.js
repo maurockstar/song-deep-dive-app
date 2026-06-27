@@ -1,5 +1,5 @@
 // Song Deep Dive — app bootstrap & UI wiring
-// build 0.4.1 — deploy-pipeline test (comment-only, no behavior change)
+// build 0.4.2 — hands-off deploy test (comment-only, no behavior change)
 (function () {
   "use strict";
   var CFG = window.SDD_CONFIG;
