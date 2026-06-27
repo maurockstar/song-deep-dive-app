@@ -1,8 +1,10 @@
 // GET /api/deepdive?id=&title=&artist=
-// Phase 2 — the real knowledge pipeline:
+// Phase 2 (AI-first) — the knowledge pipeline:
 //   1) cache (in-memory)            -> instant on repeats
 //   2) gather facts from open data  -> MusicBrainz + Wikipedia (free, no key)
-//   3) AI writes the cards          -> Anthropic Claude Haiku, constrained to those facts
+//   3) AI writes the cards          -> Anthropic Claude, GROUNDED in those facts but
+//                                      also allowed to use well-known music knowledge
+//                                      (with anti-hallucination guardrails)
 //   4) graceful fallback            -> plain open-data cards if no key / any failure
 //
 // To enable the AI step, add an Application Setting in Azure (Configuration):
@@ -10,14 +12,15 @@
 // Never commit the key to the repo. Until it's set, the app still works (open-data cards).
 
 const MB_BASE = "https://musicbrainz.org/ws/2";
-const MB_UA = "SongDeepDive/0.2 (https://zealous-pond-0200e1e10.7.azurestaticapps.net)"; // MusicBrainz requires a UA
+const MB_UA = "SongDeepDive/0.4 (https://zealous-pond-0200e1e10.7.azurestaticapps.net)"; // MusicBrainz requires a UA
 const WIKI = "https://en.wikipedia.org/api/rest_v1/page/summary/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"; // change here if your account uses a different Haiku id
+const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"; // change here if your account uses a different id
 
 const cache = new Map();
 const CACHE_MAX = 500;
 function cacheKey(q) { return ("song:" + q.title + "|" + q.artist).toLowerCase().replace(/\s+/g, "_"); }
+function norm(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
 
 async function jget(url, headers, ms) {
   const ctrl = new AbortController();
@@ -29,28 +32,92 @@ async function jget(url, headers, ms) {
   } catch (e) { return null; } finally { clearTimeout(timer); }
 }
 
+// ---- MusicBrainz: pick the best matching recording, not just the first ----
+async function bestRecording(title, artist) {
+  const query = encodeURIComponent(`recording:"${title}"` + (artist ? ` AND artist:"${artist}"` : ""));
+  const search = await jget(`${MB_BASE}/recording?query=${query}&fmt=json&limit=8`, { "User-Agent": MB_UA });
+  const recs = (search && search.recordings) || [];
+  if (!recs.length) return null;
+  const nt = norm(title), na = norm(artist);
+  let best = null, bestScore = -1;
+  for (const r of recs) {
+    const credit = (r["artist-credit"] || []).map(a => a.name).join(", ");
+    let score = (r.score || 0);
+    if (norm(r.title) === nt) score += 30;                // exact title match
+    if (na && norm(credit).includes(na)) score += 40;     // artist matches the query
+    if ((r["first-release-date"] || "").slice(0, 4)) score += 5;
+    if (score > bestScore) { bestScore = score; best = r; }
+  }
+  return best;
+}
+
+// ---- credits: group by role, dedupe, keep human-readable ----
+function addCredit(map, type, name) {
+  if (!type || !name) return;
+  const t = String(type).toLowerCase();
+  if (!map.has(t)) map.set(t, new Set());
+  map.get(t).add(name);
+}
+function flattenCredits(map) {
+  const order = ["composer", "lyricist", "writer", "producer", "vocal", "performer", "instrument", "arranger", "engineer", "mix"];
+  const keys = Array.from(map.keys()).sort((a, b) => {
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+  const out = [];
+  for (const k of keys) {
+    const names = Array.from(map.get(k)).slice(0, 4);
+    if (names.length) out.push(`${k}: ${names.join(", ")}`);
+  }
+  return out;
+}
+
+// ---- Wikipedia: try candidate titles, skip disambiguation pages ----
+async function wikiSummary(candidates) {
+  for (const c of candidates) {
+    const s = await jget(WIKI + encodeURIComponent(c), {});
+    if (s && s.extract && s.type !== "disambiguation") return s.extract.trim();
+  }
+  return "";
+}
+
 async function gatherFacts(title, artist, context) {
   const facts = { title, artist, year: "", mbArtist: "", credits: [], wiki: "", wikiArtist: "" };
-  // MusicBrainz: find the recording
-  const query = encodeURIComponent(`recording:"${title}"` + (artist ? ` AND artist:"${artist}"` : ""));
-  const search = await jget(`${MB_BASE}/recording?query=${query}&fmt=json&limit=1`, { "User-Agent": MB_UA });
-  if (search && search.recordings && search.recordings[0]) {
-    const rec = search.recordings[0];
+  const creditMap = new Map();
+
+  const rec = await bestRecording(title, artist);
+  if (rec) {
     facts.mbArtist = (rec["artist-credit"] || []).map(a => a.name).join(", ");
     facts.year = (rec["first-release-date"] || "").slice(0, 4);
+
+    // recording-level relationships (performers, producers, etc.) + the linked work
     const det = await jget(`${MB_BASE}/recording/${rec.id}?inc=artist-rels+work-rels&fmt=json`, { "User-Agent": MB_UA });
+    let workId = "";
     if (det && Array.isArray(det.relations)) {
       for (const rel of det.relations) {
-        if (rel.artist && rel.type) facts.credits.push(`${rel.type}: ${rel.artist.name}`);
+        if (rel.artist && rel.type) addCredit(creditMap, rel.type, rel.artist.name);
+        if (rel.work && rel.work.id && !workId) workId = rel.work.id;
+      }
+    }
+    // work-level relationships give us composers / lyricists
+    if (workId) {
+      const work = await jget(`${MB_BASE}/work/${workId}?inc=artist-rels&fmt=json`, { "User-Agent": MB_UA });
+      if (work && Array.isArray(work.relations)) {
+        for (const rel of work.relations) {
+          if (rel.artist && rel.type) addCredit(creditMap, rel.type, rel.artist.name);
+        }
       }
     }
   }
-  // Wikipedia: short, sourced background for the song and the artist
-  const w1 = await jget(WIKI + encodeURIComponent(title), {});
-  if (w1 && w1.extract) facts.wiki = w1.extract;
+  facts.credits = flattenCredits(creditMap);
+
+  // Wikipedia — disambiguation-safe, song first then artist
+  const songCands = artist
+    ? [`${title} (${artist} song)`, `${title} (song)`, title]
+    : [`${title} (song)`, title];
+  facts.wiki = await wikiSummary(songCands);
   if (artist) {
-    const w2 = await jget(WIKI + encodeURIComponent(artist), {});
-    if (w2 && w2.extract) facts.wikiArtist = w2.extract;
+    facts.wikiArtist = await wikiSummary([artist, `${artist} (band)`, `${artist} (musician)`, `${artist} (singer)`]);
   }
   return facts;
 }
@@ -62,21 +129,31 @@ function factsBlock(f) {
   if (f.credits.length) s += `Credits / relationships: ${f.credits.slice(0, 12).join("; ")}\n`;
   if (f.wiki) s += `Wikipedia (song): ${f.wiki}\n`;
   if (f.wikiArtist) s += `Wikipedia (artist): ${f.wikiArtist}\n`;
+  if (!f.mbArtist && !f.wiki && !f.wikiArtist) s += `(Open-data lookup was thin for this one.)\n`;
   return s;
 }
 
 async function writeCardsWithClaude(apiKey, f, context) {
-  const system = "You write short, warm, accurate music 'deep dive' cards for fans. Use ONLY the facts provided — never invent names, dates, collaborators, or claims. If the facts are thin, stay general and honest rather than guessing. Output STRICT JSON only — no prose, no markdown fences.";
+  const system =
+    "You are a warm, knowledgeable music writer creating short 'deep dive' cards for someone who is listening to this song right now. " +
+    "Your goal: spark curiosity and joy about the music they love, and — where it feels natural — gently remind them that the best thing to do next is to go live life: feel it, share it, get outside. Never force that nudge.\n\n" +
+    "GROUNDING RULES (important):\n" +
+    "- The FACTS block (from MusicBrainz + Wikipedia) is your source of truth. Prefer it for all names, dates, credits, and specific claims.\n" +
+    "- You MAY enrich the cards with widely-known, well-established context about the song, artist, genre, era, and influences from your own knowledge — this is encouraged so the cards feel rich and alive.\n" +
+    "- NEVER fabricate specific credits, collaborators, chart positions, dates, lyrics, or quotes you are not confident are correct. When unsure about a specific, stay general or leave it out. Accuracy beats flourish.\n" +
+    "- If the facts are thin AND you genuinely do not recognize the song, be honest and keep it general rather than inventing details.\n" +
+    "- Do not reproduce song lyrics.\n\n" +
+    "Output STRICT JSON only — no prose, no markdown fences.";
   const user =
     `Facts:\n${factsBlock(f)}\n\n` +
-    `Write four cards as STRICT JSON in exactly this shape:\n` +
+    `Write four cards as STRICT JSON in exactly this shape (keep titles tight, bodies vivid):\n` +
     `{"cards":[` +
-    `{"kicker":"The story","title":"max 6 words","body":"1-2 engaging sentences","extra":"1-2 sentence 'go deeper'"},` +
-    `{"kicker":"The people","title":"...","body":"who made it","extra":"..."},` +
-    `{"kicker":"Connections","title":"...","body":"how it connects to other music/artists","extra":"..."},` +
-    `{"kicker":"Did you know","title":"...","body":"a surprising shareable fact","extra":"..."}` +
+    `{"kicker":"The story","title":"max 6 words","body":"1-2 vivid sentences on what this song is and why it matters","extra":"2-3 sentences going deeper on its origin, era, or meaning"},` +
+    `{"kicker":"The people","title":"max 6 words","body":"who made it — artist, key writers/producers","extra":"2-3 sentences on the people and how they shaped it"},` +
+    `{"kicker":"Connections","title":"max 6 words","body":"how it connects to other music, artists, or scenes","extra":"2-3 sentences mapping influences, samples, or descendants"},` +
+    `{"kicker":"Did you know","title":"max 6 words","body":"one surprising, shareable fact","extra":"2-3 sentences — and, if it fits, a warm nudge to go enjoy it out in the world"}` +
     `]}`;
-  const body = { model: ANTHROPIC_MODEL, max_tokens: 1024, system, messages: [{ role: "user", content: user }] };
+  const body = { model: ANTHROPIC_MODEL, max_tokens: 1200, system, messages: [{ role: "user", content: user }] };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20000);
   try {
@@ -104,7 +181,7 @@ function templateCards(f) {
     { kicker: "The story", title: `About “${f.title}”${yr}`, body: wiki.slice(0, 240), extra: wiki.slice(240, 560) || "More background as we enrich the data." },
     { kicker: "The people", title: "Who made it", body: `Performed by ${who}.`, extra: credits },
     { kicker: "Connections", title: "How it connects", body: `Related artists and influences around ${who} map here.`, extra: "Built from open relationship data (MusicBrainz)." },
-    { kicker: "Did you know", title: "A fact to share", body: f.wikiArtist ? f.wikiArtist.slice(0, 200) : `Tap to learn more about ${who}.`, extra: "Shareable cards arrive in Phase 3." }
+    { kicker: "Did you know", title: "A fact to share", body: f.wikiArtist ? f.wikiArtist.slice(0, 200) : `Tap to learn more about ${who}.`, extra: "Then go put the phone down and enjoy it out loud." }
   ];
 }
 
