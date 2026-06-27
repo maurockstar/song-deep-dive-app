@@ -10,6 +10,15 @@
     .connects { display:flex; gap:8px; align-items:center; }
     .btn-primary.alt { background:linear-gradient(135deg,#fa2d48,#fb5c74); }
     .btn-primary.hidden { display:none; }
+    .btn-primary.connected { filter:saturate(.7) brightness(1.05); }
+    .apple-notice { margin:0 0 14px; padding:12px 14px; border-radius:12px; font-size:14px; line-height:1.45;
+      border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); }
+    .apple-notice.hidden { display:none; }
+    .apple-notice ul { margin:8px 0 0; padding-left:18px; }
+    .apple-notice li { margin:4px 0; }
+    .apple-notice.error { border-color:rgba(250,45,72,.5); background:rgba(250,45,72,.10); }
+    .apple-notice.warn  { border-color:rgba(251,176,59,.5); background:rgba(251,176,59,.10); }
+    .apple-notice.info  { border-color:rgba(94,150,255,.45); background:rgba(94,150,255,.10); }
   </style>
 </head>
 <body>
