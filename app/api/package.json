@@ -1,0 +1,10 @@
+{
+  "name": "song-deep-dive-api",
+  "version": "0.1.0",
+  "description": "Azure Functions API for Song Deep Dive (Phase 1 stub).",
+  "main": "deepdive/index.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "func start"
+  }
+}
