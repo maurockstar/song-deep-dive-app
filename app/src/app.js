@@ -21,7 +21,8 @@
     tpl: document.getElementById("cardTpl")
   };
 
-  var lastTrackId = null;
+  var lastPlayingId = null;   // last Spotify track id the poller has seen (for change detection)
+  var manualMode = false;     // true after a manual search, so polling won't hijack the cards
   var pollTimer = null;
   var loadSeq = 0; // bumps on every new deep dive so stale responses can't overwrite fresh ones
 
@@ -136,10 +137,15 @@
   async function poll() {
     try {
       var track = await P.getActivePlayer().getCurrentTrack();
-      renderNowPlaying(track);
-      if (track && track.id && track.id !== lastTrackId) {
-        lastTrackId = track.id;
+      if (track && track.id && track.id !== lastPlayingId) {
+        // a new song is playing — follow it (and leave manual search mode)
+        lastPlayingId = track.id;
+        manualMode = false;
+        renderNowPlaying(track);
         loadDeepDive(track);
+      } else if (!manualMode) {
+        // same song still playing — just refresh the now-playing strip (play/pause, art)
+        renderNowPlaying(track);
       }
     } catch (e) { console.warn("poll error", e); }
   }
@@ -161,7 +167,7 @@
     if (AM && AM.ready && AM.isAuthorized && AM.isAuthorized()) {
       try { AM.playQuery(playTerm); } catch (e) { /* fall through to cards-only */ }
     }
-    lastTrackId = "manual:" + title + "|" + (artist || "");
+    manualMode = true; // pin the cards to this search until a new song starts playing
     renderNowPlaying({ title: title, artist: artist || "manual search", art: art || "", isPlaying: false });
     loadDeepDive({ id: "", title: title, artist: artist || "" });
   }
