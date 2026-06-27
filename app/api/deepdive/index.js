@@ -1,15 +1,18 @@
-// GET /api/deepdive?id=&title=&artist=
-// Phase 2 (AI-first) — the knowledge pipeline:
+// GET /api/deepdive?id=&title=&artist=[&fast=1]
+// Phase 2 (AI-first, two-phase) — the knowledge pipeline:
 //   1) cache (in-memory)            -> instant on repeats
 //   2) gather facts from open data  -> MusicBrainz + Wikipedia (free, no key)
-//   3) AI writes the cards          -> Anthropic Claude, GROUNDED in those facts but
+//   3) AI writes the cards          -> Anthropic Claude, grounded in those facts but
 //                                      also allowed to use well-known music knowledge
 //                                      (with anti-hallucination guardrails)
 //   4) graceful fallback            -> plain open-data cards if no key / any failure
 //
+// Two-phase: ?fast=1 returns open-data cards instantly and (if a key is set) flags
+// _meta.aiPending so the client fetches the AI-written version in a second call.
+// Facts are cached between the two calls, so open data is only gathered once.
+//
 // To enable the AI step, add an Application Setting in Azure (Configuration):
 //   ANTHROPIC_API_KEY = sk-ant-...
-// Never commit the key to the repo. Until it's set, the app still works (open-data cards).
 
 const MB_BASE = "https://musicbrainz.org/ws/2";
 const MB_UA = "SongDeepDive/0.4 (https://zealous-pond-0200e1e10.7.azurestaticapps.net)"; // MusicBrainz requires a UA
@@ -17,9 +20,11 @@ const WIKI = "https://en.wikipedia.org/api/rest_v1/page/summary/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"; // change here if your account uses a different id
 
-const cache = new Map();
+const cache = new Map();       // key -> finished payload (AI or open-data)
+const factsCache = new Map();  // key -> gathered facts (shared by fast + full calls)
 const CACHE_MAX = 500;
 function cacheKey(q) { return ("song:" + q.title + "|" + q.artist).toLowerCase().replace(/\s+/g, "_"); }
+function capped(map) { if (map.size > CACHE_MAX) map.clear(); }
 function norm(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
 
 async function jget(url, headers, ms) {
@@ -32,7 +37,6 @@ async function jget(url, headers, ms) {
   } catch (e) { return null; } finally { clearTimeout(timer); }
 }
 
-// ---- MusicBrainz: pick the best matching recording, not just the first ----
 async function bestRecording(title, artist) {
   const query = encodeURIComponent(`recording:"${title}"` + (artist ? ` AND artist:"${artist}"` : ""));
   const search = await jget(`${MB_BASE}/recording?query=${query}&fmt=json&limit=8`, { "User-Agent": MB_UA });
@@ -43,15 +47,14 @@ async function bestRecording(title, artist) {
   for (const r of recs) {
     const credit = (r["artist-credit"] || []).map(a => a.name).join(", ");
     let score = (r.score || 0);
-    if (norm(r.title) === nt) score += 30;                // exact title match
-    if (na && norm(credit).includes(na)) score += 40;     // artist matches the query
+    if (norm(r.title) === nt) score += 30;
+    if (na && norm(credit).includes(na)) score += 40;
     if ((r["first-release-date"] || "").slice(0, 4)) score += 5;
     if (score > bestScore) { bestScore = score; best = r; }
   }
   return best;
 }
 
-// ---- credits: group by role, dedupe, keep human-readable ----
 function addCredit(map, type, name) {
   if (!type || !name) return;
   const t = String(type).toLowerCase();
@@ -72,7 +75,6 @@ function flattenCredits(map) {
   return out;
 }
 
-// ---- Wikipedia: try candidate titles, skip disambiguation pages ----
 async function wikiSummary(candidates) {
   for (const c of candidates) {
     const s = await jget(WIKI + encodeURIComponent(c), {});
@@ -90,7 +92,6 @@ async function gatherFacts(title, artist, context) {
     facts.mbArtist = (rec["artist-credit"] || []).map(a => a.name).join(", ");
     facts.year = (rec["first-release-date"] || "").slice(0, 4);
 
-    // recording-level relationships (performers, producers, etc.) + the linked work
     const det = await jget(`${MB_BASE}/recording/${rec.id}?inc=artist-rels+work-rels&fmt=json`, { "User-Agent": MB_UA });
     let workId = "";
     if (det && Array.isArray(det.relations)) {
@@ -99,7 +100,6 @@ async function gatherFacts(title, artist, context) {
         if (rel.work && rel.work.id && !workId) workId = rel.work.id;
       }
     }
-    // work-level relationships give us composers / lyricists
     if (workId) {
       const work = await jget(`${MB_BASE}/work/${workId}?inc=artist-rels&fmt=json`, { "User-Agent": MB_UA });
       if (work && Array.isArray(work.relations)) {
@@ -111,7 +111,6 @@ async function gatherFacts(title, artist, context) {
   }
   facts.credits = flattenCredits(creditMap);
 
-  // Wikipedia — disambiguation-safe, song first then artist
   const songCands = artist
     ? [`${title} (${artist} song)`, `${title} (song)`, title]
     : [`${title} (song)`, title];
@@ -185,28 +184,59 @@ function templateCards(f) {
   ];
 }
 
+async function getFacts(key, q, context) {
+  let facts = factsCache.get(key);
+  if (!facts) {
+    facts = await gatherFacts(q.title, q.artist, context);
+    capped(factsCache);
+    factsCache.set(key, facts);
+  }
+  return facts;
+}
+
 module.exports = async function (context, req) {
   const q = {
     id: (req.query && req.query.id) || "",
     title: ((req.query && req.query.title) || "").trim(),
     artist: ((req.query && req.query.artist) || "").trim()
   };
+  const fast = !!(req.query && (req.query.fast === "1" || req.query.fast === "true"));
   if (!q.title) {
     context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Provide ?title=" } };
     return;
   }
 
   const key = cacheKey(q);
+  // A finished (AI or final) payload always wins — instant.
   if (cache.has(key)) {
     context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: cache.get(key) };
     return;
   }
 
-  const facts = await gatherFacts(q.title, q.artist, context);
-  let cards = null;
   const apiKey = process.env.ANTHROPIC_API_KEY;
+  const facts = await getFacts(key, q, context);
+
+  // Phase 1 — instant open-data cards. If a key is set, tell the client an AI upgrade is coming.
+  if (fast) {
+    const payload = {
+      track: { id: q.id, title: q.title, artist: q.artist },
+      cards: templateCards(facts),
+      _meta: {
+        source: apiKey ? "open-data (AI pending)" : "open-data (add ANTHROPIC_API_KEY for AI)",
+        aiPending: !!apiKey,
+        year: facts.year || null,
+        generatedAt: new Date().toISOString()
+      }
+    };
+    // Not cached as final, so the follow-up full call still runs the AI.
+    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: payload };
+    return;
+  }
+
+  // Phase 2 (or single-call) — AI cards if a key is set, else open-data.
+  let cards = null;
   if (apiKey) cards = await writeCardsWithClaude(apiKey, facts, context);
-  let aiUsed = !!(cards && cards.length);
+  const aiUsed = !!(cards && cards.length);
   if (!aiUsed) cards = templateCards(facts);
 
   const payload = {
@@ -214,7 +244,7 @@ module.exports = async function (context, req) {
     cards,
     _meta: { source: aiUsed ? "ai+open-data" : "open-data (add ANTHROPIC_API_KEY for AI)", year: facts.year || null, generatedAt: new Date().toISOString() }
   };
-  if (cache.size > CACHE_MAX) cache.clear();
+  capped(cache);
   cache.set(key, payload);
 
   context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: payload };
