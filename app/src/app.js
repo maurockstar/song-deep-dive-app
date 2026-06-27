@@ -128,6 +128,11 @@
   function manualDive() {
     var q = (els.manualInput.value || "").trim();
     if (!q) return;
+    // If Apple Music is connected, actually play the song too (then show its deep dive).
+    var AM = window.SDD && window.SDD.appleMusic;
+    if (AM && AM.ready && AM.isAuthorized && AM.isAuthorized()) {
+      try { AM.playQuery(q); } catch (e) { /* fall through to cards-only */ }
+    }
     lastTrackId = "manual:" + q;
     renderNowPlaying({ title: q, artist: "manual search", art: "", isPlaying: false });
     loadDeepDive({ id: "", title: q, artist: "" });
@@ -141,6 +146,13 @@
     var didLogin = await S.handleRedirect();
     if (didLogin) refreshConnectButton();
     if (S.isConnected()) startPolling();
+
+    // Apple Music — inert unless /api/amtoken is configured (server-side MusicKit key).
+    window.SDD = window.SDD || {};
+    window.SDD.ui = { renderNowPlaying: renderNowPlaying, loadDeepDive: loadDeepDive, setStatus: setStatus };
+    if (window.SDD.appleMusic && window.SDD.appleMusic.init) {
+      try { await window.SDD.appleMusic.init(window.SDD.ui); } catch (e) { console.warn("apple init", e); }
+    }
   }
 
   document.addEventListener("DOMContentLoaded", init);

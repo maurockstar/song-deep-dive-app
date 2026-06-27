@@ -6,6 +6,11 @@
   <title>Song Deep Dive</title>
   <meta name="description" content="The story, the people, and the connections behind the song you're playing.">
   <link rel="stylesheet" href="./styles.css">
+  <style>
+    .connects { display:flex; gap:8px; align-items:center; }
+    .btn-primary.alt { background:linear-gradient(135deg,#fa2d48,#fb5c74); }
+    .btn-primary.hidden { display:none; }
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -13,7 +18,10 @@
       <span class="logo" aria-hidden="true"></span>
       <span class="name">Song Deep Dive</span>
     </div>
-    <button id="connectBtn" class="btn-primary">Connect Spotify</button>
+    <div class="connects">
+      <button id="connectBtn" class="btn-primary">Connect Spotify</button>
+      <button id="appleBtn" class="btn-primary alt hidden">Connect Apple Music</button>
+    </div>
   </header>
 
   <main class="stage">
@@ -60,6 +68,7 @@
 
   <script src="./config.js"></script>
   <script src="./spotify.js"></script>
+  <script src="./applemusic.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
