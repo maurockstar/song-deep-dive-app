@@ -197,17 +197,16 @@
     console.warn("apple authorize failed:", code, msg, e);
 
     if (/AUTHORIZATION_ERROR|Unauthorized/i.test(code + " " + msg)) {
-      var blocked = await thirdPartyCookiesLikelyBlocked();
-      var reasons =
-        "<b>Apple wouldn't issue a sign-in token.</b> The two real causes:" +
-        "<ul>" +
-        "<li><b>No Apple Music subscription</b> on the Apple ID you used — MusicKit only grants a user token to active subscribers. " +
-        "Use an Apple ID with a live Apple Music plan (or start its free trial), then click Connect again.</li>" +
-        "<li><b>The browser blocked the sign-in cookie</b>" + (blocked ? " (detected here)" : "") +
-        ". In Chrome's address bar open the site settings (the icon left of the URL) → allow third-party cookies for this site, then retry.</li>" +
-        "</ul>";
-      showNotice(reasons, "error");
-      if (ui) ui.setStatus("Apple Music not connected", "");
+      // Known pending state: MusicKit user-token issuance is awaiting Apple-side
+      // provisioning (the developer token works for catalog, but sign-in returns
+      // a bare "Unauthorized" for every account). Show a calm "coming soon"
+      // instead of alarming the user. The logger still captures the full error.
+      showNotice(
+        "<b>Apple Music is coming soon.</b> We're finishing setup with Apple, so sign-in isn't available just yet — " +
+        "Spotify is fully connected and ready in the meantime. We'll switch Apple Music on the moment it clears.",
+        "info"
+      );
+      if (ui) ui.setStatus("Apple Music — coming soon", "");
     } else {
       showNotice("Couldn't connect to Apple Music: " + (msg || code || "unknown error") + ".", "error");
       if (ui) ui.setStatus("Apple Music not connected", "");
