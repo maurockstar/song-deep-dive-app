@@ -119,9 +119,27 @@
         album: it.album ? it.album.name : "",
         art: it.album && it.album.images && it.album.images[0] ? it.album.images[0].url : "",
         isPlaying: !!d.is_playing,
+        progressMs: d.progress_ms || 0,
+        durationMs: it.duration_ms || 0,
         source: "spotify"
       };
     }
+  };
+
+  // ---------- transport control (best-effort; needs the user-modify-playback-state scope) ----------
+  async function control(method, path) {
+    var token = await getAccessToken();
+    if (!token) return false;
+    try {
+      var res = await fetch(API + path, { method: method, headers: { Authorization: "Bearer " + token } });
+      return res.ok || res.status === 204;
+    } catch (e) { return false; }
+  }
+  var playerControl = {
+    play: function () { return control("PUT", "/me/player/play"); },
+    pause: function () { return control("PUT", "/me/player/pause"); },
+    next: function () { return control("POST", "/me/player/next"); },
+    prev: function () { return control("POST", "/me/player/previous"); }
   };
 
   // ---------- player abstraction registry ----------
@@ -133,5 +151,5 @@
 
   window.SDD = window.SDD || {};
   window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout };
-  window.SDD.player = { spotify: spotifyPlayer, setActivePlayer: setActivePlayer, getActivePlayer: getActivePlayer };
+  window.SDD.player = { spotify: spotifyPlayer, setActivePlayer: setActivePlayer, getActivePlayer: getActivePlayer, control: playerControl };
 })();

@@ -9,8 +9,8 @@ window.SDD_CONFIG = {
   // Auto-detects localhost vs production; override if your paths differ.
   REDIRECT_URI: window.location.origin + "/",
 
-  // Read-only scopes: what you're listening to. Nothing that changes your account.
-  SCOPES: ["user-read-currently-playing", "user-read-playback-state"],
+  // Scopes: read what you're listening to + control playback (play/pause/skip) from the player.
+  SCOPES: ["user-read-currently-playing", "user-read-playback-state", "user-modify-playback-state"],
 
   // How often (ms) to poll Spotify for the current track.
   POLL_MS: 4000,
@@ -18,6 +18,6 @@ window.SDD_CONFIG = {
   // API base for the deep-dive endpoint (Azure Functions; same origin in SWA).
   API_BASE: "/api",
 
-  // App version — single source of truth, shown in the footer.
-  VERSION: "0.7"
+  // App version — single source of truth (bumping it also invalidates the local card cache).
+  VERSION: "0.8"
 };
