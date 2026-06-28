@@ -326,6 +326,20 @@
     $("gk-lightbox").classList.add("open");
   }
 
+  // ---------- transport ----------
+  function flashPmsg(t) { var e = $("gk-pmsg"); if (!e) return; e.textContent = t; e.classList.add("show"); clearTimeout(e._t); e._t = setTimeout(function () { e.classList.remove("show"); }, 4200); }
+  async function transport(action) {
+    if (!S.isConnected()) { showSetup(true); refreshSetup(); return; }
+    var ok = false;
+    try {
+      if (action === "toggle") { ok = await (playing ? CTRL.pause() : CTRL.play()); if (ok) { playing = !playing; setPlayIcon(playing); pstate.playing = playing; pstate.at = Date.now(); } }
+      else if (action === "next") { ok = await CTRL.next(); }
+      else if (action === "prev") { ok = await CTRL.prev(); }
+    } catch (e) { ok = false; }
+    if (!ok) flashPmsg("Reconnect Spotify in ⚙ Setup to control playback (requires Spotify Premium).");
+    setTimeout(poll, 900);
+  }
+
   // ---------- init ----------
   function init() {
     panel = $("gk-panel"); hint = $("gk-hint"); tabsEl = $("gk-tabs");
@@ -369,9 +383,9 @@
     });
 
     // transport
-    $("gk-playbtn").addEventListener("click", function () { if (!S.isConnected()) { showSetup(true); refreshSetup(); return; } if (playing) { CTRL.pause && CTRL.pause(); playing = false; } else { CTRL.play && CTRL.play(); playing = true; } setPlayIcon(playing); pstate.playing = playing; pstate.at = Date.now(); setTimeout(poll, 700); });
-    $("gk-prev").addEventListener("click", function () { CTRL.prev && CTRL.prev(); setTimeout(poll, 700); });
-    $("gk-next").addEventListener("click", function () { CTRL.next && CTRL.next(); setTimeout(poll, 700); });
+    $("gk-playbtn").addEventListener("click", function () { transport("toggle"); });
+    $("gk-prev").addEventListener("click", function () { transport("prev"); });
+    $("gk-next").addEventListener("click", function () { transport("next"); });
 
     // cover + lightbox
     $("gk-cover").addEventListener("click", function () { openLightbox(cur && cur.art, cur && cur.title, cur && cur.artist); });
