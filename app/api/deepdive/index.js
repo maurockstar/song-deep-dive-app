@@ -237,6 +237,25 @@ module.exports = async function (context, req) {
     artist: ((req.query && req.query.artist) || "").trim()
   };
   const fast = !!(req.query && (req.query.fast === "1" || req.query.fast === "true"));
+
+  // Diagnostics: /api/deepdive?diag=1 — reports shared-cache wiring (no secret values exposed).
+  if (req.query && req.query.diag === "1") {
+    let ping = null;
+    try { ping = await redisCmd(["PING"]); } catch (e) { ping = "error: " + (e && e.message); }
+    context.res = {
+      status: 200,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      body: {
+        version: VERSION,
+        redisUrlSet: !!REDIS_URL,
+        redisTokenSet: !!REDIS_TOKEN,
+        redisUrlHost: REDIS_URL ? (REDIS_URL.split("/")[2] || "?") : null,
+        redisPing: ping
+      }
+    };
+    return;
+  }
+
   if (!q.title) {
     context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Provide ?title=" } };
     return;
