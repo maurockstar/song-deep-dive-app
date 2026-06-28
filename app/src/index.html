@@ -52,6 +52,40 @@
       .lang-selector { width:100%; text-align:center; }
       .btn-primary { width:100%; padding:11px 16px; font-size:15px; }
     }
+
+    /* logo wordmark font — match the Claude Design "Sunset" mark (rounded Baloo 2) */
+    .name { font-family:var(--rounded); font-weight:700; letter-spacing:-.01em; }
+
+    /* search bar fills the row — Dive button removed (press Enter or pick a suggestion to dive) */
+    #manualBtn { display:none; }
+
+    /* bigger album art (2x) + now-playing text aligned to the bottom of the picture */
+    .np-art { width:168px; height:168px; }
+    .now { align-items:flex-end; }
+    .np-right { flex:1; min-width:0; display:flex; align-items:flex-end; gap:14px; }
+    .np-title.scrolling { text-overflow:clip; animation-name:nptitle; animation-timing-function:linear; animation-iteration-count:infinite; }
+    @keyframes nptitle { 0%,12%{text-indent:0} 44%,56%{text-indent:var(--np-scroll,0)} 88%,100%{text-indent:0} }
+
+    @media (max-width:680px) {
+      .setup-btn { padding:7px 14px; font-size:13px; }
+      .np-right { flex-direction:column; align-items:stretch; gap:6px; }
+      .np-meta { flex:0 0 auto; }
+      .np-state { text-align:left; }
+    }
+
+    /* search hidden behind an icon by default (cards prioritized); deploys left→right + pushes cards down */
+    .manual { flex-direction:column; align-items:flex-start; gap:0; }
+    .search-toggle { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+    .search-icon-btn { display:inline-flex; align-items:center; justify-content:center; width:46px; height:46px; border-radius:50%;
+      background:var(--panel); border:1px solid var(--border2); color:var(--sun-400); cursor:pointer;
+      transition:background .2s, color .2s, border-color .2s; }
+    .search-icon-btn:hover { border-color:var(--sun-500); }
+    .search-toggle:checked ~ .search-icon-btn { background:linear-gradient(180deg,var(--sun-300),var(--sun-500)); color:var(--on-accent); border-color:transparent; }
+    .manual-search { width:100%; max-height:0; opacity:0; margin-top:0; overflow:hidden;
+      transition:max-height .42s cubic-bezier(.22,.7,.2,1), margin-top .42s ease, opacity .3s ease; }
+    .search-toggle:checked ~ .manual-search { max-height:60px; opacity:1; margin-top:12px; overflow:visible; }
+    .manual-search input { max-width:0; transition:max-width .42s cubic-bezier(.22,.7,.2,1); }
+    .search-toggle:checked ~ .manual-search input { max-width:100%; }
   </style>
 </head>
 <body>
@@ -81,17 +115,23 @@
     <!-- Now playing -->
     <section id="nowPlaying" class="now hidden" aria-live="polite">
       <img id="npArt" class="np-art" alt="" />
-      <div class="np-meta">
-        <div id="npTitle" class="np-title">—</div>
-        <div id="npArtist" class="np-artist">—</div>
+      <div class="np-right">
+        <div class="np-meta">
+          <div id="npTitle" class="np-title">—</div>
+          <div id="npArtist" class="np-artist">—</div>
+        </div>
+        <div id="npState" class="np-state">·</div>
       </div>
-      <div id="npState" class="np-state">·</div>
     </section>
 
     <!-- Manual fallback -->
     <section class="manual">
+      <input type="checkbox" id="searchToggle" class="search-toggle" aria-hidden="true" tabindex="-1" />
+      <label for="searchToggle" class="search-icon-btn" role="button" aria-label="Search a song">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+      </label>
       <div class="manual-search">
-        <input id="manualInput" type="text" placeholder="or search a song to dive into…" autocomplete="off"
+        <input id="manualInput" type="text" placeholder="search a song to dive into…" autocomplete="off"
                role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestList" />
         <ul id="suggestList" class="suggest hidden" role="listbox" aria-label="Song suggestions"></ul>
       </div>
@@ -129,5 +169,33 @@
   <script src="./spotify.js"></script>
   <script src="./applemusic.js"></script>
   <script src="./app.js"></script>
+  <script>
+    /* Song-title marquee: on mobile, slowly scroll the title left→right when it overflows.
+       Animates text-indent on #npTitle itself, so app.js's textContent updates don't restart it;
+       only re-evaluates when the title actually changes. Title only — never the artist. */
+    (function () {
+      var el = document.getElementById("npTitle");
+      if (!el || !("MutationObserver" in window)) return;
+      var lastTitle = null;
+      function evalScroll() {
+        var title = el.textContent || "";
+        if (title === lastTitle) return;            // unchanged (e.g. poll re-render) — keep animating
+        lastTitle = title;
+        el.classList.remove("scrolling");
+        el.style.removeProperty("--np-scroll");
+        el.style.removeProperty("animation-duration");
+        if (!window.matchMedia("(max-width:680px)").matches) return;   // mobile only
+        var overflow = el.scrollWidth - el.clientWidth;
+        if (overflow > 4) {
+          el.style.setProperty("--np-scroll", "-" + (overflow + 8) + "px");
+          el.style.animationDuration = Math.max(8, (overflow + 8) / 12) + "s";
+          el.classList.add("scrolling");
+        }
+      }
+      new MutationObserver(evalScroll).observe(el, { childList: true, characterData: true, subtree: true });
+      window.addEventListener("resize", function () { lastTitle = null; evalScroll(); });
+      evalScroll();
+    })();
+  </script>
 </body>
 </html>
