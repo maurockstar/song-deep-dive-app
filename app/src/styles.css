@@ -40,11 +40,13 @@ body{
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(18,10,16,.78);backdrop-filter:blur(8px);z-index:5}
 .brand{display:flex;align-items:center;gap:11px}
 .logo{width:30px;height:30px;display:inline-block;flex:none}
-.logo rect{transform-box:fill-box;transform-origin:50% 100%;animation:eq 1.05s ease-in-out infinite}
-.logo rect:nth-of-type(1){animation-delay:-.15s}
-.logo rect:nth-of-type(2){animation-delay:-.55s}
-.logo rect:nth-of-type(3){animation-delay:-.35s}
-@keyframes eq{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.45)}}
+.logo rect{transform-box:fill-box;transform-origin:50% 100%}
+.logo rect:nth-of-type(1){animation:eqa .90s ease-in-out -.05s infinite}
+.logo rect:nth-of-type(2){animation:eqb 1.27s ease-in-out -.50s infinite}
+.logo rect:nth-of-type(3){animation:eqc 1.07s ease-in-out -.85s infinite}
+@keyframes eqa{0%,100%{transform:scaleY(.55)}28%{transform:scaleY(1)}52%{transform:scaleY(.72)}74%{transform:scaleY(.95)}}
+@keyframes eqb{0%,100%{transform:scaleY(1)}22%{transform:scaleY(.40)}48%{transform:scaleY(.82)}68%{transform:scaleY(.50)}86%{transform:scaleY(.74)}}
+@keyframes eqc{0%,100%{transform:scaleY(.72)}36%{transform:scaleY(1)}60%{transform:scaleY(.42)}82%{transform:scaleY(.90)}}
 @media (prefers-reduced-motion:reduce){.logo rect{animation:none}}
 .name{font-family:var(--display);font-weight:800;letter-spacing:-.02em;font-size:20px;color:var(--text-hi)}
 .name .e3{color:var(--sun-400)}

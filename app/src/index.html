@@ -53,8 +53,8 @@
       .btn-primary { width:100%; padding:11px 16px; font-size:15px; }
     }
 
-    /* logo wordmark font — match the Claude Design "Sunset" mark (rounded Baloo 2) */
-    .name { font-family:var(--rounded); font-weight:700; letter-spacing:-.01em; }
+    /* logo wordmark font — Space Grotesk Bold (700), per the Claude Design source */
+    .name { font-family:var(--sans); font-weight:700; letter-spacing:-.01em; }
 
     /* search bar fills the row — Dive button removed (press Enter or pick a suggestion to dive) */
     #manualBtn { display:none; }
@@ -87,12 +87,20 @@
     .manual-search input { max-width:0; transition:max-width .42s cubic-bezier(.22,.7,.2,1); }
     .search-toggle:checked ~ .manual-search input { max-width:100%; }
 
+    /* language dropdown removed for now */
+    #langSelector, .lang-selector { display:none !important; }
+
     /* desktop: logo 2x, brand aligned to the album cover's left edge (stage 920 + .now padding) */
     @media (min-width:681px) {
       .logo { width:72px; height:72px; }
       .name { font-size:44px; }
       .topbar { padding-left: max(36px, (100% - 920px) / 2 + 36px);
                 padding-right: max(18px, (100% - 920px) / 2 + 18px); }
+      /* connect buttons → service-logo icons only, ~30% smaller */
+      #connectBtn, #appleBtn { width:28px; height:28px; min-width:0; padding:0; border:none; box-shadow:none; font-size:0; color:transparent; border-radius:7px; }
+      #connectBtn:hover, #appleBtn:hover { filter:brightness(1.06); }
+      #connectBtn { background:transparent url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%2212%22%20fill%3D%22%231DB954%22%2F%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23061b0f%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M6.2%209.3c4.2-1.2%208.8-.8%2012.1%201.3%22%2F%3E%3Cpath%20d%3D%22M7%2012.7c3.4-1%207-.6%209.8%201.1%22%2F%3E%3Cpath%20d%3D%22M7.7%2015.8c2.5-.7%205.2-.4%207.4%20.9%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/contain no-repeat; }
+      #appleBtn { background:transparent url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22a%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23FB5C74%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23FA233B%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2222%22%20height%3D%2222%22%20rx%3D%226%22%20fill%3D%22url(%23a)%22%2F%3E%3Cpath%20d%3D%22M15.2%206.3l-5.6%201.3v6.9a1.9%201.9%200%201%201-1.1-1.72V8.1l5.6-1.3z%22%20fill%3D%22%23ffffff%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat; }
     }
   </style>
 </head>
