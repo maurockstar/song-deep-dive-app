@@ -86,6 +86,14 @@
     .search-toggle:checked ~ .manual-search { max-height:60px; opacity:1; margin-top:12px; overflow:visible; }
     .manual-search input { max-width:0; transition:max-width .42s cubic-bezier(.22,.7,.2,1); }
     .search-toggle:checked ~ .manual-search input { max-width:100%; }
+
+    /* desktop: logo 2x, brand aligned to the album cover's left edge (stage 920 + .now padding) */
+    @media (min-width:681px) {
+      .logo { width:72px; height:72px; }
+      .name { font-size:44px; }
+      .topbar { padding-left: max(36px, (100% - 920px) / 2 + 36px);
+                padding-right: max(18px, (100% - 920px) / 2 + 18px); }
+    }
   </style>
 </head>
 <body>
