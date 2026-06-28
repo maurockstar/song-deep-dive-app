@@ -161,16 +161,18 @@
   /* ---------- mobile ---------- */
   @media (max-width:680px){
     body{padding:0}
-    .wrap{border:none;border-radius:0;padding:16px 16px calc(78px + env(safe-area-inset-bottom));min-height:100vh}
+    .wrap{border:none;border-radius:0;padding:16px 16px calc(96px + env(safe-area-inset-bottom));min-height:100vh}
     .cards{grid-template-columns:1fr}
     .np-title{font-size:26px}
-    /* tabs become a fixed bottom nav bar */
-    .tabs{position:fixed;left:0;right:0;bottom:0;z-index:60;margin:0;gap:0;justify-content:space-around;
-      background:rgba(18,10,16,.94);backdrop-filter:blur(10px);border-top:1px solid var(--border);
-      padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
-    .gk-tab{width:auto;flex:1;height:46px;border-radius:0;background:none;border:none;color:var(--dim);position:relative}
-    .gk-tab.active{background:none;color:var(--sun)}
-    .gk-tab.active::before{content:"";position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:22px;height:3px;border-radius:0 0 3px 3px;background:linear-gradient(90deg,#FFB14D,#FF8A4D)}
+    /* playback: frameless icons, orange play (no disc) */
+    .play-btn{background:none;box-shadow:none;width:auto;height:auto;padding:4px}
+    .play-btn svg{fill:var(--sun);width:30px;height:30px}
+    /* tabs: floating bottom nav with an orange active pill */
+    .tabs{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:60;margin:0;gap:4px;justify-content:space-around;
+      background:rgba(24,14,21,.92);backdrop-filter:blur(12px);border:1px solid var(--border2);border-radius:20px;
+      padding:7px}
+    .gk-tab{width:auto;flex:1;height:48px;border-radius:14px;background:none;border:none;color:var(--dim);position:relative}
+    .gk-tab.active{background:linear-gradient(180deg,#FFB14D,#FF8A4D);color:var(--on-accent)}
   }
 </style>
 </head>
