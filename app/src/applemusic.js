@@ -24,6 +24,10 @@
 
   function api(p) { return (CFG.API_BASE || "/api") + p; }
 
+  // structured logging (no-op if log.js absent)
+  function L(action, detail, level) { try { if (window.SDD && SDD.log) { if (arguments.length >= 2) return SDD.log.ev("apple", action, detail, level); return SDD.log.ev("apple", action); } } catch (e) {} }
+  function decodeJwt(t) { try { var p = t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return JSON.parse(decodeURIComponent(escape(atob(p)))); } catch (e) { return null; } }
+
   // ---- UI helpers -----------------------------------------------------------
 
   function ensureNotice() {
@@ -74,17 +78,23 @@
   async function fetchToken() {
     try {
       var r = await fetch(api("/amtoken") + "?t=" + Date.now(), { cache: "no-store" });
+      L("token:fetch", { status: r.status, ok: r.ok });
       if (!r.ok) return null;
       var j = await r.json();
-      return (j && j.configured && j.token) ? j.token : null;
-    } catch (e) { return null; }
+      var tok = (j && j.configured && j.token) ? j.token : null;
+      var c = tok ? decodeJwt(tok) : null;
+      L("token:claims", { configured: !!(j && j.configured), hasToken: !!tok, iss: c && c.iss, exp: c && c.exp, origin: c && c.origin });
+      return tok;
+    } catch (e) { L("token:fetch:error", e, "error"); return null; }
   }
 
   function loadAndConfigure(token) {
     return new Promise(function (resolve, reject) {
       function go() {
+        L("configure:start", { musicKitVersion: (window.MusicKit && MusicKit.version) || null });
         MusicKit.configure({ developerToken: token, app: { name: "geeek", build: "0.8" } })
-          .then(resolve).catch(reject);
+          .then(function (m) { L("configure:ok", { storefront: m && (m.storefrontId || m.storefrontCountryCode) }); resolve(m); })
+          .catch(function (err) { L("configure:fail", err, "error"); reject(err); });
       }
       if (window.MusicKit) { go(); return; }
       document.addEventListener("musickitloaded", go, { once: true });
@@ -137,9 +147,10 @@
     try {
       var res = await music.api.music("v1/me/storefront");
       // 200 means the user token is valid and accepted.
-      void res;
+      L("storefront:ok", { data: res && res.data });
       return true;
     } catch (e) {
+      L("storefront:fail", e, "error");
       return false;
     }
   }
@@ -147,9 +158,19 @@
   async function connect() {
     clearNotice();
     if (ui) ui.setStatus("connecting to Apple Music…", "progress");
+    L("authorize:start", {
+      isAuthorized: isAuthorized(), hasMusic: !!music,
+      storefront: music && (music.storefrontId || music.storefrontCountryCode),
+      origin: location.origin,
+      musicUserToken: !!(music && music.musicUserToken)
+    });
+    var userToken = null;
     try {
-      await music.authorize();           // opens Apple sign-in popup
+      userToken = await music.authorize();           // opens Apple sign-in popup
+      L("authorize:ok", { gotToken: !!userToken, isAuthorized: isAuthorized() });
     } catch (e) {
+      // FULL error object (errorCode/description live on non-enumerable props)
+      L("authorize:fail", e, "error");
       await explainAuthError(e);
       refreshButton();
       return;
@@ -159,6 +180,7 @@
     refreshButton();
     if (isAuthorized()) {
       var ok = await checkSubscription();
+      L("subscription:check", { ok: ok });
       if (!ok) {
         showNotice(
           "Signed in to Apple, but this Apple ID has <b>no active Apple Music subscription</b>, " +
@@ -221,8 +243,9 @@
   async function init(uiHelpers) {
     ui = uiHelpers;
     btn = document.getElementById("appleBtn");
+    L("init:start", { hasBtn: !!btn });
     var token = await fetchToken();
-    if (!token) return false; // not configured → stay hidden & inert
+    if (!token) { L("init:no-token"); return false; } // not configured → stay hidden & inert
     try {
       music = await loadAndConfigure(token);
       try { if (music.storefrontId) storefront = music.storefrontId; } catch (e) {}
@@ -230,11 +253,15 @@
       music.addEventListener("playbackStateDidChange", onState);
       // The key fix: reflect authorization state whenever MusicKit changes it,
       // so the button is always correct regardless of how/when auth resolves.
-      music.addEventListener("authorizationStatusDidChange", refreshButton);
-    } catch (e) { console.warn("apple init failed", e); return false; }
+      music.addEventListener("authorizationStatusDidChange", function (e) {
+        L("authorizationStatusDidChange", { status: e && e.authorizationStatus, isAuthorized: isAuthorized() });
+        refreshButton();
+      });
+    } catch (e) { L("init:fail", e, "error"); console.warn("apple init failed", e); return false; }
     if (btn) btn.classList.remove("hidden");
     refreshButton();           // restores "Apple Music ✓" if a token already exists
     AM.ready = true;
+    L("init:ok", { storefront: storefront, isAuthorized: isAuthorized() });
     return true;
   }
 
