@@ -60,7 +60,7 @@
     #manualBtn { display:none; }
 
     /* bigger album art (2x) + now-playing text aligned to the bottom of the picture */
-    .np-art { width:168px; height:168px; }
+    .np-art { width:210px; height:210px; }
     .now { align-items:flex-end; }
     .np-right { flex:1; min-width:0; display:flex; align-items:flex-end; gap:14px; }
     .np-title.scrolling { text-overflow:clip; animation-name:nptitle; animation-timing-function:linear; animation-iteration-count:infinite; }
@@ -99,8 +99,8 @@
       /* connect buttons → service-logo icons only, ~30% smaller */
       #connectBtn, #appleBtn { width:28px; height:28px; min-width:0; padding:0; border:none; box-shadow:none; font-size:0; color:transparent; border-radius:7px; }
       #connectBtn:hover, #appleBtn:hover { filter:brightness(1.06); }
-      #connectBtn { background:transparent url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%2212%22%20fill%3D%22%231DB954%22%2F%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23061b0f%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M6.2%209.3c4.2-1.2%208.8-.8%2012.1%201.3%22%2F%3E%3Cpath%20d%3D%22M7%2012.7c3.4-1%207-.6%209.8%201.1%22%2F%3E%3Cpath%20d%3D%22M7.7%2015.8c2.5-.7%205.2-.4%207.4%20.9%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/contain no-repeat; }
-      #appleBtn { background:transparent url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22a%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23FB5C74%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23FA233B%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2222%22%20height%3D%2222%22%20rx%3D%226%22%20fill%3D%22url(%23a)%22%2F%3E%3Cpath%20d%3D%22M15.2%206.3l-5.6%201.3v6.9a1.9%201.9%200%201%201-1.1-1.72V8.1l5.6-1.3z%22%20fill%3D%22%23ffffff%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat; }
+      #connectBtn { background:transparent url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%2212%22%20fill%3D%22%231DB954%22%2F%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23061b0f%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M6.2%209.3c4.2-1.2%208.8-.8%2012.1%201.3%22%2F%3E%3Cpath%20d%3D%22M7%2012.7c3.4-1%207-.6%209.8%201.1%22%2F%3E%3Cpath%20d%3D%22M7.7%2015.8c2.5-.7%205.2-.4%207.4%20.9%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") center/115% no-repeat; }
+      #appleBtn { background:transparent url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22a%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23FB5C74%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23FA233B%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%2222%22%20height%3D%2222%22%20rx%3D%226%22%20fill%3D%22url(%23a)%22%2F%3E%3Cpath%20d%3D%22M15.2%206.3l-5.6%201.3v6.9a1.9%201.9%200%201%201-1.1-1.72V8.1l5.6-1.3z%22%20fill%3D%22%23ffffff%22%2F%3E%3C%2Fsvg%3E") center/115% no-repeat; }
     }
   </style>
 </head>
@@ -144,7 +144,7 @@
     <section class="manual">
       <input type="checkbox" id="searchToggle" class="search-toggle" aria-hidden="true" tabindex="-1" />
       <label for="searchToggle" class="search-icon-btn" role="button" aria-label="Search a song">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
       </label>
       <div class="manual-search">
         <input id="manualInput" type="text" placeholder="search a song to dive into…" autocomplete="off"
