@@ -240,8 +240,24 @@ module.exports = async function (context, req) {
 
   // Diagnostics: /api/deepdive?diag=1 — reports shared-cache wiring (no secret values exposed).
   if (req.query && req.query.diag === "1") {
-    let ping = null;
-    try { ping = await redisCmd(["PING"]); } catch (e) { ping = "error: " + (e && e.message); }
+    var probe = {};
+    if (REDIS_URL && REDIS_TOKEN) {
+      var pctrl = new AbortController();
+      var ptimer = setTimeout(function () { pctrl.abort(); }, 6000);
+      try {
+        var pr = await fetch(REDIS_URL, {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + REDIS_TOKEN, "Content-Type": "application/json" },
+          body: JSON.stringify(["PING"]),
+          signal: pctrl.signal
+        });
+        probe.httpStatus = pr.status;
+        probe.body = (await pr.text()).slice(0, 160); // PONG / error message — never contains the token
+      } catch (e) { probe.error = String((e && e.message) || e).slice(0, 160); }
+      finally { clearTimeout(ptimer); }
+    } else {
+      probe.note = "url or token missing";
+    }
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
@@ -249,8 +265,9 @@ module.exports = async function (context, req) {
         version: VERSION,
         redisUrlSet: !!REDIS_URL,
         redisTokenSet: !!REDIS_TOKEN,
+        redisTokenLen: REDIS_TOKEN ? REDIS_TOKEN.length : 0,
         redisUrlHost: REDIS_URL ? (REDIS_URL.split("/")[2] || "?") : null,
-        redisPing: ping
+        probe: probe
       }
     };
     return;
