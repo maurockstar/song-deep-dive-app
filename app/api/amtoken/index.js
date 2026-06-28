@@ -84,7 +84,7 @@ module.exports = async function (context, req) {
     if (cached && cached.exp - now > 3600) {
       context.res = {
         status: 200,
-        headers: { "Content-Type": "application/json", "Cache-Control": "private, max-age=3600" },
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
         body: { configured: true, token: cached.token, exp: cached.exp }
       };
       return;
@@ -93,7 +93,7 @@ module.exports = async function (context, req) {
     cached = mintToken(pem, keyId, teamId, 150 * 24 * 3600); // 150 days (< 180 max)
     context.res = {
       status: 200,
-      headers: { "Content-Type": "application/json", "Cache-Control": "private, max-age=3600" },
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
       body: { configured: true, token: cached.token, exp: cached.exp }
     };
   } catch (e) {

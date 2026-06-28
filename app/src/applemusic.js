@@ -73,7 +73,7 @@
 
   async function fetchToken() {
     try {
-      var r = await fetch(api("/amtoken"));
+      var r = await fetch(api("/amtoken") + "?t=" + Date.now(), { cache: "no-store" });
       if (!r.ok) return null;
       var j = await r.json();
       return (j && j.configured && j.token) ? j.token : null;
