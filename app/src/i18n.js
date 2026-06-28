@@ -7,7 +7,7 @@
     en: {
       "brand.name": "g<span class=\"e3\">eee</span>k",
       "btn.connectSpotify": "Connect Spotify",
-      "btn.connected": "Connected ✓",
+      "btn.connected": "Connected to Spotify ✓",
       "btn.dive": "Dive",
       "btn.logout": "Logout",
       "search.placeholder": "Or search a song to dive into…",
@@ -31,7 +31,7 @@
     es: {
       "brand.name": "g<span class=\"e3\">eee</span>k",
       "btn.connectSpotify": "Conectar Spotify",
-      "btn.connected": "Conectado ✓",
+      "btn.connected": "Conectado a Spotify ✓",
       "btn.dive": "Bucear",
       "btn.logout": "Cerrar Sesión",
       "search.placeholder": "O busca una canción para sumergirte…",

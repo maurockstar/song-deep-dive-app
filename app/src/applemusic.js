@@ -57,7 +57,7 @@
   function refreshButton() {
     if (!btn) return;
     if (isAuthorized()) {
-      btn.textContent = "Apple Music ✓";
+      btn.textContent = "Connected to Apple Music ✓";
       btn.classList.add("connected");
       btn.onclick = disconnect;
       if (ui) ui.setStatus("Apple Music connected", "ok");

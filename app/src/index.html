@@ -22,6 +22,36 @@
     .apple-notice.error { border-color:rgba(255,90,74,.5); background:rgba(255,90,74,.10); }
     .apple-notice.warn  { border-color:rgba(255,198,75,.5); background:rgba(255,198,75,.10); }
     .apple-notice.info  { border-color:rgba(70,200,216,.45); background:rgba(70,200,216,.10); }
+
+    /* Spotify-green connect button (Apple Music keeps the pink .alt style) */
+    #connectBtn { background:linear-gradient(180deg,#1ED760,#1DB954); color:#04140D; }
+    #connectBtn:hover { filter:brightness(1.05); }
+
+    /* bigger logo + wordmark */
+    .logo { width:36px; height:36px; }
+    .name { font-size:22px; }
+
+    /* "Setup" — hidden on desktop; the single control on mobile */
+    .setup-toggle { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+    .setup-btn { display:none; align-items:center; gap:8px; cursor:pointer; user-select:none;
+      font-family:var(--sans); font-weight:700; font-size:14px; color:var(--on-accent);
+      background:linear-gradient(180deg,var(--sun-300),var(--sun-500)); padding:10px 20px;
+      border-radius:999px; box-shadow:0 0 22px -6px var(--glow); }
+
+    @media (max-width:680px) {
+      .topbar { padding:12px 16px; }
+      .logo { width:44px; height:44px; }
+      .name { font-size:27px; }
+      .setup-btn { display:inline-flex; }
+      .connects { display:none; position:absolute; top:calc(100% + 10px); right:14px;
+        flex-direction:column; align-items:stretch; gap:10px; min-width:236px;
+        background:var(--panel); border:1px solid var(--border2); border-radius:16px;
+        padding:14px; box-shadow:0 26px 60px -20px rgba(12,4,8,.75); z-index:30; }
+      .setup-toggle:checked ~ .connects { display:flex; }
+      .connects > * { width:100%; }
+      .lang-selector { width:100%; text-align:center; }
+      .btn-primary { width:100%; padding:11px 16px; font-size:15px; }
+    }
   </style>
 </head>
 <body>
@@ -35,13 +65,15 @@
       </svg>
       <span class="name" id="brandName">g<span class="e3">eee</span>k</span>
     </div>
+    <input type="checkbox" id="setupToggle" class="setup-toggle" aria-hidden="true" tabindex="-1" />
+    <label for="setupToggle" class="setup-btn" role="button" aria-label="Setup">Setup</label>
     <div class="connects">
       <select id="langSelector" class="lang-selector" aria-label="Select language">
         <option value="en">English</option>
         <option value="es">Español</option>
       </select>
-      <button id="connectBtn" class="btn-primary">Connect Spotify</button>
       <button id="appleBtn" class="btn-primary alt hidden">Connect Apple Music</button>
+      <button id="connectBtn" class="btn-primary">Connect Spotify</button>
     </div>
   </header>
 
