@@ -42,7 +42,20 @@ function mintToken(privateKeyPem, keyId, teamId, ttlSeconds) {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + ttlSeconds;
   const header = { alg: "ES256", kid: keyId, typ: "JWT" };
-  const payload = { iss: teamId, iat: now, exp: exp };
+  // The `origin` claim lists the web domains allowed to use this token with
+  // MusicKit JS. Catalog reads work without it, but user-authorization
+  // (authorize()) returns AUTHORIZATION_ERROR/Unauthorized unless the requesting
+  // origin is listed here. Override via APPLE_MUSIC_ORIGINS (comma-separated).
+  const defaultOrigins = [
+    "https://app.geeek.fm",
+    "https://www.geeek.fm",
+    "https://geeek.fm",
+    "https://zealous-pond-0200e1e10.7.azurestaticapps.net"
+  ];
+  const origins = (process.env.APPLE_MUSIC_ORIGINS
+    ? process.env.APPLE_MUSIC_ORIGINS.split(",").map(s => s.trim()).filter(Boolean)
+    : defaultOrigins);
+  const payload = { iss: teamId, iat: now, exp: exp, origin: origins };
   const data = b64url(JSON.stringify(header)) + "." + b64url(JSON.stringify(payload));
   const signer = crypto.createSign("SHA256");
   signer.update(data);
