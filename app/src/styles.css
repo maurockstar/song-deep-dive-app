@@ -1,7 +1,7 @@
 /* ============================================================
    GEEEK — app theme  ·  "Sunset" colorway
    Drop-in replacement for app/src/styles.css. Same class names as the
-   original Song Deep Dive scaffold, re-skinned to the Geeek design system.
+   original geeek scaffold, re-skinned to the geeek design system.
    Self-contained (tokens inlined) so it works in the plain-CSS app with no build step.
    ============================================================ */
 @import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Space+Grotesk:wght@400;500;700&family=Baloo+2:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");

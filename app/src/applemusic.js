@@ -1,4 +1,4 @@
-// Song Deep Dive — Apple Music provider (MusicKit JS v3).
+// geeek — Apple Music provider (MusicKit JS v3).
 //
 // Stays completely inert until /api/amtoken is configured server-side:
 // if there's no developer token, the Apple Music button never appears and
@@ -83,7 +83,7 @@
   function loadAndConfigure(token) {
     return new Promise(function (resolve, reject) {
       function go() {
-        MusicKit.configure({ developerToken: token, app: { name: "Song Deep Dive", build: "0.7" } })
+        MusicKit.configure({ developerToken: token, app: { name: "geeek", build: "0.8" } })
           .then(resolve).catch(reject);
       }
       if (window.MusicKit) { go(); return; }

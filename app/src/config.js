@@ -1,8 +1,8 @@
-// Song Deep Dive — client config
+// geeek — client config
 // Fill SPOTIFY_CLIENT_ID from your Spotify Developer dashboard (Step 2 in SETUP.md).
 // No client secret is used — we authenticate with PKCE, which is safe for static sites.
 window.SDD_CONFIG = {
-  // Spotify app "Song Deep Dive" (client ID is public — safe for PKCE in a static site):
+  // Spotify app "geeek" (client ID is public — safe for PKCE in a static site):
   SPOTIFY_CLIENT_ID: "3ca604830a2049e78185f966c87e18ca",
 
   // Redirect URI must EXACTLY match one registered in the Spotify dashboard.

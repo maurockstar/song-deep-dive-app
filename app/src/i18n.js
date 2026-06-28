@@ -1,4 +1,4 @@
-// Song Deep Dive — Internationalization (i18n)
+// geeek — Internationalization (i18n)
 // Supports English and Spanish
 (function () {
   "use strict";

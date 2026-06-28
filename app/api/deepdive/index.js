@@ -15,7 +15,7 @@
 //   ANTHROPIC_API_KEY = sk-ant-...
 
 const MB_BASE = "https://musicbrainz.org/ws/2";
-const MB_UA = "SongDeepDive/0.8 (https://zealous-pond-0200e1e10.7.azurestaticapps.net)"; // MusicBrainz requires a UA
+const MB_UA = "geeek/0.8 (https://geeek.fm)"; // MusicBrainz requires a UA
 const WIKI = "https://en.wikipedia.org/api/rest_v1/page/summary/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"; // change here if your account uses a different id

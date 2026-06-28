@@ -1,4 +1,4 @@
-// Song Deep Dive — Spotify auth (PKCE) + player abstraction
+// geeek — Spotify auth (PKCE) + player abstraction
 // PKCE = Proof Key for Code Exchange: secure OAuth for static apps with no secret.
 (function () {
   "use strict";
