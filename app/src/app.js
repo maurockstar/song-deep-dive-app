@@ -266,7 +266,7 @@
   function updateUIText() {
     if (i18n) {
       // Update brand name
-      if (els.brandName) els.brandName.textContent = i18n.t("brand.name");
+      if (els.brandName) els.brandName.innerHTML = i18n.t("brand.name");
 
       // Update manual input placeholder
       if (els.manualInput) els.manualInput.placeholder = i18n.t("search.placeholder");

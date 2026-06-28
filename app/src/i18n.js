@@ -5,7 +5,7 @@
 
   var translations = {
     en: {
-      "brand.name": "Song Deep Dive",
+      "brand.name": "g<span class=\"e3\">eee</span>k",
       "btn.connectSpotify": "Connect Spotify",
       "btn.connected": "Connected ✓",
       "btn.dive": "Dive",
@@ -26,10 +26,10 @@
       "skeleton.kicker": "loading",
       "skeleton.title": "Gathering the story…",
       "skeleton.body": "one moment",
-      "version": "Song Deep Dive · v"
+      "version": "Geeek · v"
     },
     es: {
-      "brand.name": "Canción Deep Dive",
+      "brand.name": "g<span class=\"e3\">eee</span>k",
       "btn.connectSpotify": "Conectar Spotify",
       "btn.connected": "Conectado ✓",
       "btn.dive": "Bucear",
@@ -50,7 +50,7 @@
       "skeleton.kicker": "cargando",
       "skeleton.title": "Reuniendo la historia…",
       "skeleton.body": "un momento",
-      "version": "Canción Deep Dive · v"
+      "version": "Geeek · v"
     }
   };
 

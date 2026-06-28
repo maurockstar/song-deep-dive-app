@@ -3,31 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Song Deep Dive</title>
+  <title>Geeek</title>
   <meta name="description" content="The story, the people, and the connections behind the song you're playing.">
   <link rel="stylesheet" href="./styles.css">
   <style>
+    /* Geeek "Sunset" tweaks for the topbar utilities + Apple Music notices */
     .connects { display:flex; gap:8px; align-items:center; }
-    .btn-primary.alt { background:linear-gradient(135deg,#fa2d48,#fb5c74); }
+    .btn-primary.alt { background:linear-gradient(135deg,#FB5C74,#FA233B); color:#FFF3E6; }
     .btn-primary.hidden { display:none; }
-    .btn-primary.connected { filter:saturate(.7) brightness(1.05); }
-    .lang-selector { background:#0c1620; border:1px solid rgba(29,185,84,.3); color:var(--text); padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; }
-    .lang-selector:hover { border-color:var(--green); }
+    .btn-primary.connected { filter:saturate(.8) brightness(1.04); }
+    .lang-selector { background:#1E121A; border:1px solid #3C2735; color:var(--text); padding:9px 12px; border-radius:999px; cursor:pointer; font-size:13px; font-weight:600; font-family:var(--sans); }
+    .lang-selector:hover { border-color:var(--sun-500); }
     .apple-notice { margin:0 0 14px; padding:12px 14px; border-radius:12px; font-size:14px; line-height:1.45;
-      border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); }
+      border:1px solid #2E1C28; background:rgba(246,236,224,.04); }
     .apple-notice.hidden { display:none; }
     .apple-notice ul { margin:8px 0 0; padding-left:18px; }
     .apple-notice li { margin:4px 0; }
-    .apple-notice.error { border-color:rgba(250,45,72,.5); background:rgba(250,45,72,.10); }
-    .apple-notice.warn  { border-color:rgba(251,176,59,.5); background:rgba(251,176,59,.10); }
-    .apple-notice.info  { border-color:rgba(94,150,255,.45); background:rgba(94,150,255,.10); }
+    .apple-notice.error { border-color:rgba(255,90,74,.5); background:rgba(255,90,74,.10); }
+    .apple-notice.warn  { border-color:rgba(255,198,75,.5); background:rgba(255,198,75,.10); }
+    .apple-notice.info  { border-color:rgba(70,200,216,.45); background:rgba(70,200,216,.10); }
   </style>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo" aria-hidden="true"></span>
-      <span class="name" id="brandName">Song Deep Dive</span>
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+        <defs><linearGradient id="gk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC64B"/><stop offset="1" stop-color="#FF8A4D"/></linearGradient></defs>
+        <rect x="9" y="28" width="11" height="24" rx="5.5" fill="url(#gk)"/>
+        <rect x="26.5" y="8" width="11" height="44" rx="5.5" fill="url(#gk)"/>
+        <rect x="44" y="18" width="11" height="34" rx="5.5" fill="url(#gk)"/>
+      </svg>
+      <span class="name" id="brandName">g<span class="e3">eee</span>k</span>
     </div>
     <div class="connects">
       <select id="langSelector" class="lang-selector" aria-label="Select language">
@@ -53,7 +59,7 @@
     <!-- Manual fallback -->
     <section class="manual">
       <div class="manual-search">
-        <input id="manualInput" type="text" placeholder="Or search a song to dive into…" autocomplete="off"
+        <input id="manualInput" type="text" placeholder="or search a song to dive into…" autocomplete="off"
                role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestList" />
         <ul id="suggestList" class="suggest hidden" role="listbox" aria-label="Song suggestions"></ul>
       </div>
@@ -64,13 +70,13 @@
     <section id="deepDive" class="cards" aria-live="polite">
       <div class="empty" id="emptyState">
         <h1 id="emptyH1">Geek out about the music you love.</h1>
-        <p id="emptyP">Connect Spotify (or search a song) and we'll surface the story behind it, who made it, and how it connects to everything else.</p>
+        <p id="emptyP">Connect Spotify (or search a song) and we'll surface the story behind it, who made it, and how it connects to everything else — then go live your life.</p>
       </div>
     </section>
   </main>
 
   <footer class="foot">
-    <span id="appVersion">Song Deep Dive · v0.7</span>
+    <span id="appVersion">Geeek · family beta</span>
     <span id="status" class="status">not connected</span>
   </footer>
 
