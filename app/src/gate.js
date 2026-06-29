@@ -1,17 +1,18 @@
-// geeek — sign-in gate (front door).
+// geeek — sign-in gate (Sign in with Apple only).
 //
 // On load it overlays the app with the black login landing, asks /api/session,
 // and:
-//   • dormant (auth not configured) or already signed in -> removes the overlay,
-//     the app runs normally.
-//   • signed out -> shows the animated logo; click it to open the glass dialog,
-//     enter credentials, POST /api/auth, then reload into the app.
-//
-// Stays completely inert visually once authed, so it never gets in the way.
+//   • dormant (auth not configured) or already signed in -> removes the overlay.
+//   • signed out -> shows the animated logo; click it to open the dialog with the
+//     "Sign in with Apple" button. Apple returns an identity token which we POST
+//     to /api/apple-auth; if the Apple ID is on the approved list, we get a
+//     session and reload into the app.
 (function () {
   "use strict";
   var CFG = window.SDD_CONFIG || {};
   function api(p) { return (CFG.API_BASE || "/api") + p; }
+  var APPLE_CLIENT_ID = "";
+  var appleReady = false;
 
   var root = document.createElement("div");
   root.id = "gkGate";
@@ -33,24 +34,22 @@
     '#gkGate .hint{margin-top:22px;font-size:13px;letter-spacing:.04em;color:#fff;animation:gkHint 2.2s ease-in-out infinite}' +
     '#gkGate .ov{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}' +
     '#gkGate .ov.show{display:flex}' +
-    '#gkGate .dlg{width:320px;max-width:88%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:16px;padding:24px 22px 22px;color:#fff}' +
-    '#gkGate .hd{display:flex;align-items:center;justify-content:space-between;font-size:17px;font-weight:500}' +
-    '#gkGate .sub{font-size:12.5px;color:rgba(255,255,255,.6);margin:4px 0 16px}' +
+    '#gkGate .dlg{width:320px;max-width:88%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:16px;padding:24px 22px 22px;color:#fff;text-align:center}' +
+    '#gkGate .hd{display:flex;align-items:center;justify-content:space-between;font-size:17px;font-weight:500;text-align:left}' +
+    '#gkGate .sub{font-size:12.5px;color:rgba(255,255,255,.6);margin:4px 0 18px;text-align:left}' +
     '#gkGate .x{cursor:pointer;color:rgba(255,255,255,.55);font-size:20px;line-height:1}' +
-    '#gkGate input{width:100%;box-sizing:border-box;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:10px;color:#fff;padding:12px 14px;font-size:15px;margin-top:10px;outline:none;font-family:inherit}' +
-    '#gkGate input::placeholder{color:rgba(255,255,255,.45)}' +
-    '#gkGate input:focus{border-color:rgba(255,159,77,.7);box-shadow:0 0 0 3px rgba(255,138,77,.18)}' +
-    '#gkGate .enter{width:100%;margin-top:16px;padding:12px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;font-size:15px;background:linear-gradient(180deg,#FFB14D,#FF8A4D);color:#1A0B05}' +
-    '#gkGate .msg{min-height:18px;margin-top:12px;font-size:12.5px;text-align:center;color:rgba(255,255,255,.7)}' +
+    '#gkGate .appleBtn{width:100%;padding:12px 14px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600;font-size:15px;background:#fff;color:#000;display:flex;align-items:center;justify-content:center;gap:8px}' +
+    '#gkGate .appleBtn:disabled{opacity:.5;cursor:default}' +
+    '#gkGate .msg{min-height:18px;margin-top:14px;font-size:12.5px;color:rgba(255,255,255,.7);line-height:1.5}' +
     '</style>' +
     '<div class="lg" id="gkLg" role="button" tabindex="0" aria-label="Open sign in">g<span class="bars"><i></i><i></i><i></i></span>k</div>' +
     '<div class="hint">click the logo to sign in</div>' +
     '<div class="ov" id="gkOv"><div class="dlg" id="gkDlg">' +
     '<div class="hd"><span>Sign in to geeek</span><span class="x" id="gkX">&times;</span></div>' +
-    '<div class="sub">Enter your credentials to continue</div>' +
-    '<input id="gkU" type="text" placeholder="Username" autocomplete="username" />' +
-    '<input id="gkP" type="password" placeholder="Password" autocomplete="current-password" />' +
-    '<button class="enter" id="gkGo">Enter</button>' +
+    '<div class="sub">Use your Apple ID to continue</div>' +
+    '<button class="appleBtn" id="gkApple">' +
+    '<svg width="16" height="16" viewBox="0 0 384 512" fill="#000" aria-hidden="true"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>' +
+    'Sign in with Apple</button>' +
     '<div class="msg" id="gkMsg"></div>' +
     '</div></div>';
 
@@ -60,53 +59,71 @@
     wire();
     check();
   }
-
   function hideGate() { root.classList.add("gk-hide"); }
-  function showLogin() { /* gate already visible; nothing else needed */ }
+  function setMsg(t, c) { var m = root.querySelector("#gkMsg"); m.style.color = c || "rgba(255,255,255,.7)"; m.innerHTML = t || ""; }
+
+  function loadAppleJs() {
+    return new Promise(function (resolve, reject) {
+      if (window.AppleID && window.AppleID.auth) { resolve(); return; }
+      var s = document.createElement("script");
+      s.src = "https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js";
+      s.async = true;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error("apple js failed")); };
+      document.head.appendChild(s);
+    });
+  }
+  function initApple() {
+    if (appleReady || !APPLE_CLIENT_ID || !window.AppleID) return;
+    AppleID.auth.init({ clientId: APPLE_CLIENT_ID, scope: "name email", redirectURI: location.origin + "/", usePopup: true });
+    appleReady = true;
+  }
+
+  function signInApple() {
+    var btn = root.querySelector("#gkApple");
+    if (!APPLE_CLIENT_ID) { setMsg("Sign-in isn't fully configured yet.", "#FF8C7A"); return; }
+    setMsg("Opening Apple…");
+    loadAppleJs().then(function () {
+      initApple();
+      return AppleID.auth.signIn();
+    }).then(function (res) {
+      var idt = res && res.authorization && res.authorization.id_token;
+      if (!idt) { setMsg("No token returned from Apple.", "#FF8C7A"); return; }
+      setMsg("Verifying…");
+      return fetch(api("/apple-auth"), {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_token: idt })
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (out) {
+          if (out.ok && out.j && out.j.ok) { setMsg("Welcome — opening geeek…", "#7CE2A8"); setTimeout(function () { location.reload(); }, 400); }
+          else { setMsg((out.j && out.j.error) || "This Apple ID isn't approved yet.", "#FF8C7A"); }
+        });
+    }).catch(function (e) {
+      if (e && (e.error === "popup_closed_by_user" || e.error === "user_cancelled_authorize")) { setMsg(""); return; }
+      setMsg("Apple sign-in didn't complete. Try again.", "#FF8C7A");
+    });
+  }
 
   function wire() {
     var ov = root.querySelector("#gkOv");
     var lg = root.querySelector("#gkLg");
-    var u = root.querySelector("#gkU");
-    var p = root.querySelector("#gkP");
-    var msg = root.querySelector("#gkMsg");
-
-    function open() { ov.classList.add("show"); msg.textContent = ""; setTimeout(function () { u.focus(); }, 60); }
+    function open() { ov.classList.add("show"); setMsg(""); }
     function close() { ov.classList.remove("show"); }
     lg.onclick = open;
     lg.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") open(); };
     root.querySelector("#gkX").onclick = close;
     ov.onclick = function (e) { if (e.target === ov) close(); };
-
-    function go() {
-      var un = (u.value || "").trim(), pw = p.value || "";
-      if (!un || !pw) { msg.style.color = "rgba(255,255,255,.7)"; msg.textContent = "Enter a username and password."; return; }
-      msg.style.color = "rgba(255,255,255,.7)"; msg.textContent = "Signing in…";
-      fetch(api("/auth"), {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: un, password: pw })
-      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-        .then(function (res) {
-          if (res.ok && res.j && res.j.ok) {
-            msg.style.color = "#7CE2A8"; msg.textContent = "Welcome — opening geeek…";
-            setTimeout(function () { location.reload(); }, 400);
-          } else {
-            msg.style.color = "#FF8C7A"; msg.textContent = (res.j && res.j.error) || "Wrong username or password.";
-          }
-        }).catch(function () { msg.style.color = "#FF8C7A"; msg.textContent = "Couldn't reach the server. Try again."; });
-    }
-    root.querySelector("#gkGo").onclick = go;
-    p.onkeydown = function (e) { if (e.key === "Enter") go(); };
-    u.onkeydown = function (e) { if (e.key === "Enter") p.focus(); };
+    root.querySelector("#gkApple").onclick = signInApple;
   }
 
   function check() {
     fetch(api("/session"), { credentials: "include", cache: "no-store" })
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        if (!j || j.enabled === false || j.authed === true) { hideGate(); }
-        else { showLogin(); }
+        if (!j || j.enabled === false || j.authed === true) { hideGate(); return; }
+        APPLE_CLIENT_ID = j.appleClientId || "";
+        loadAppleJs().then(initApple).catch(function () {});
       })
       .catch(function () { hideGate(); }); // fail open to the app; data APIs still enforce
   }

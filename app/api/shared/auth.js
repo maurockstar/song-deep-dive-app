@@ -18,26 +18,65 @@ const SESSION_DAYS = 90;
 const COOKIE = "gk_sess";
 const COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN || ".geeek.fm";
 
-function loadUsers() {
-  try {
-    const raw = fs.readFileSync(path.join(__dirname, "users.json"), "utf8");
-    const j = JSON.parse(raw);
-    return Array.isArray(j.users) ? j.users : [];
-  } catch (e) { return []; }
+// Sign in with Apple — the Services ID (web client_id / token audience).
+const APPLE_SERVICES_ID = process.env.APPLE_SIWA_SERVICES_ID || "";
+const APPLE_ISS = "https://appleid.apple.com";
+
+function readStore() {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, "users.json"), "utf8")); }
+  catch (e) { return {}; }
 }
+function loadAllow() { const j = readStore(); return Array.isArray(j.allow) ? j.allow : []; }
+function appleClientId() { return APPLE_SERVICES_ID; }
 
 function isEnabled() {
-  if (!SECRET) return false;
-  return loadUsers().some(u => u && u.u && u.salt && u.hash);
+  if (!SECRET || !APPLE_SERVICES_ID) return false;
+  return loadAllow().some(a => a && (a.email || a.sub) && a.approved !== false);
 }
 
-function verifyPassword(password, user) {
-  if (!user || !user.salt || !user.hash) return false;
+// Is this Apple identity on the approved allowlist?
+function appleAllowed(email, sub) {
+  const e = String(email || "").toLowerCase();
+  return loadAllow().find(a => a && a.approved !== false && (
+    (a.email && String(a.email).toLowerCase() === e && e) ||
+    (a.sub && sub && String(a.sub) === String(sub))
+  )) || null;
+}
+
+// Apple's public signing keys (cached ~1h).
+let _appleKeys = null, _appleKeysAt = 0;
+async function appleKeys() {
+  if (_appleKeys && (Date.now() - _appleKeysAt) < 3600000) return _appleKeys;
   try {
-    const dk = crypto.scryptSync(String(password), user.salt, 32);
-    const stored = Buffer.from(user.hash, "hex");
-    return dk.length === stored.length && crypto.timingSafeEqual(dk, stored);
-  } catch (e) { return false; }
+    const r = await fetch("https://appleid.apple.com/auth/keys");
+    if (!r.ok) return _appleKeys || [];
+    const j = await r.json();
+    _appleKeys = (j && j.keys) || [];
+    _appleKeysAt = Date.now();
+  } catch (e) { /* keep last */ }
+  return _appleKeys || [];
+}
+
+// Verify a Sign in with Apple identity token. Returns its claims or null.
+async function verifyAppleIdToken(idToken) {
+  if (!idToken || typeof idToken !== "string") return null;
+  const parts = idToken.split(".");
+  if (parts.length !== 3) return null;
+  let header, payload;
+  try { header = JSON.parse(b64urlDecode(parts[0])); payload = JSON.parse(b64urlDecode(parts[1])); } catch (e) { return null; }
+  const keys = await appleKeys();
+  const jwk = keys.find(k => k.kid === header.kid);
+  if (!jwk) return null;
+  try {
+    const pub = crypto.createPublicKey({ key: jwk, format: "jwk" });
+    const sig = Buffer.from(parts[2].replace(/-/g, "+").replace(/_/g, "/"), "base64");
+    if (!crypto.verify("RSA-SHA256", Buffer.from(parts[0] + "." + parts[1]), pub, sig)) return null;
+  } catch (e) { return null; }
+  if (payload.iss !== APPLE_ISS) return null;
+  const auds = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  if (APPLE_SERVICES_ID && auds.indexOf(APPLE_SERVICES_ID) === -1) return null;
+  if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
+  return payload;
 }
 
 function b64url(buf) {
@@ -126,6 +165,6 @@ function blockIfUnauthed(context, req) {
 }
 
 module.exports = {
-  COOKIE, SESSION_DAYS, isEnabled, loadUsers, verifyPassword,
+  COOKIE, SESSION_DAYS, isEnabled, loadAllow, appleClientId, appleAllowed, verifyAppleIdToken,
   signSession, verifySession, parseCookies, sessionFromReq, cookieHeader, corsHeaders, blockIfUnauthed
 };

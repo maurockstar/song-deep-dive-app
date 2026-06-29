@@ -1,0 +1,4 @@
+PLACEHOLDER — replace this entire file's contents with the domain-association
+file Apple gives you when you add app.geeek.fm to your Sign in with Apple
+Services ID (Apple Developer portal -> Identifiers -> your Services ID ->
+Sign in with Apple -> Configure -> Web Domain -> Download). Then re-deploy.

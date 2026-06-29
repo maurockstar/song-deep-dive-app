@@ -1,12 +1,12 @@
 {
-  "_comment": "geeek user database (local, server-side only — never served to browsers). Passwords are stored ONLY as salted scrypt hashes. Add/replace entries with: node tools/hash-password.js . Auth stays dormant until at least one user here has a salt+hash AND the AUTH_SECRET app setting is configured in Azure.",
-  "users": [
+  "_comment": "geeek access list (local, server-side only — never served to browsers). Sign in with Apple is the only login. A person can sign in ONLY if their Apple ID email (or captured 'sub') is listed in 'allow' with approved:true. Add a new user by adding their Apple email here and re-deploying. To use Apple's private-relay or to pin an exact identity, add their 'sub' too.",
+  "allow": [
     {
-      "u": "mauarr",
+      "email": "mauroarriagada@hotmail.com",
       "role": "admin",
-      "salt": "",
-      "hash": "",
-      "created": "2026-06-29"
+      "approved": true,
+      "note": "founder",
+      "added": "2026-06-29"
     }
   ]
 }

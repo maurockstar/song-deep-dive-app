@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json.schemastore.org/staticwebapp.config.json",
+  "navigationFallback": {
+    "exclude": ["/.well-known/*", "*.css", "*.js", "*.{png,jpg,svg,ico,txt}"]
+  }
+}
