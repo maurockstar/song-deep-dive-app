@@ -93,10 +93,10 @@
 
   /* deep-dive cards */
   .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .dd-card{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;max-height:300px}
+  .dd-card{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column}
   .dd-kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--sun);margin-bottom:6px}
   .dd-title{font-weight:700;font-size:16px;color:var(--ink-hi);margin-bottom:6px}
-  .dd-scroll{overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none}
+  .dd-scroll{overflow:visible}
   .suggest{scrollbar-width:none;-ms-overflow-style:none}
   .dd-scroll::-webkit-scrollbar,.suggest::-webkit-scrollbar{width:0;height:0;background:transparent}
   .dd-body{color:var(--muted);font-size:14px;line-height:1.55;margin:0}
