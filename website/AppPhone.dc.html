@@ -158,7 +158,7 @@
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:312,&quot;height&quot;:640},&quot;tab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cards&quot;,&quot;songs&quot;,&quot;artists&quot;,&quot;trivia&quot;,&quot;media&quot;,&quot;karaoke&quot;],&quot;default&quot;:&quot;cards&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;cycle&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;karaoke&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:312,&quot;height&quot;:640},&quot;tab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cards&quot;,&quot;songs&quot;,&quot;artists&quot;,&quot;trivia&quot;,&quot;media&quot;,&quot;karaoke&quot;],&quot;default&quot;:&quot;cards&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;cycle&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;karaoke&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;pointer&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
 class Component extends DCLogic {
   constructor(props){ super(props); this.order=['cards','songs','artists','trivia','media','karaoke']; this.lines=[
     'the opening line sets the scene',
@@ -205,7 +205,7 @@ class Component extends DCLogic {
     const cursorRing='display:block;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:2px solid #FF8A4D;background:rgba(255,177,77,.30);box-shadow:0 0 16px -2px rgba(255,159,77,.85);transition:transform .18s ease;transform:scale('+(cs.cursorPress?'0.7':'1')+');';
     return {
       op:this.state.op,
-      pointerOp: this.props.cycle ? 0 : (this.state.pointerTop ? 1 : 0),
+      pointerOp: (this.props.cycle || this.props.pointer===false) ? 0 : (this.state.pointerTop ? 1 : 0),
       pointerTop:this.state.pointerTop,
       tabBarRef:this.tabBarRef, cursorOuter, cursorRing,
       isCards:t==='cards', isSongs:t==='songs', isArtists:t==='artists', isTrivia:t==='trivia',

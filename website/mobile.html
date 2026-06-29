@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+<!-- geeek website v1.2 · dedicated mobile layout -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>if(window.matchMedia&&window.matchMedia("(min-width:821px)").matches){location.replace("index.html"+location.search+location.hash);}</script>
+<title>geeek — for the music you can't live without</title>
+<meta name="theme-color" content="#0E070C">
+<script src="./gate.js?v=1.0"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<div id="gk-pre" style="position:fixed;inset:0;background:#000;z-index:99998"></div>
+<script>setTimeout(function(){var e=document.getElementById("gk-pre");if(e&&e.parentNode)e.parentNode.removeChild(e);},9000);</script>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Baloo+2:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#0E070C;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;scrollbar-width:none;-ms-overflow-style:none;}
+  *::-webkit-scrollbar{width:0;height:0;display:none;}
+  @keyframes gkb1{from{height:30%}to{height:100%}}
+  @keyframes gkb2{from{height:92%}to{height:36%}}
+  @keyframes gkb3{from{height:48%}to{height:88%}}
+  @keyframes gkglow{0%,100%{opacity:.45}50%{opacity:.8}}
+</style>
+</helmet>
+<div style="max-width:480px;margin:0 auto;background:radial-gradient(620px 380px at 78% -6%,rgba(255,138,77,.16),transparent 60%),radial-gradient(520px 360px at 0% 16%,rgba(255,90,60,.08),transparent 55%),#0E070C;color:#E7DACE;font-family:'Space Grotesk',system-ui,sans-serif;min-height:100vh;padding-bottom:28px;overflow-x:hidden;position:relative;">
+
+  <!-- sticky top bar -->
+  <div style="position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;padding:13px 18px;background:rgba(14,7,12,.82);backdrop-filter:blur(10px);border-bottom:1px solid #1E121A;">
+    <div style="display:flex;align-items:center;font-family:'Space Grotesk';font-weight:700;font-size:22px;letter-spacing:-.03em;color:#F6ECE0;">g<span style="display:inline-flex;align-items:flex-end;gap:2px;height:15px;margin:0 3px;"><i style="width:4.5px;border-radius:3px;background:linear-gradient(180deg,#FFC64B,#FF8A4D);animation:gkb1 .9s ease-in-out infinite alternate;"></i><i style="width:4.5px;border-radius:3px;background:linear-gradient(180deg,#FFC64B,#FF8A4D);animation:gkb2 .78s ease-in-out infinite alternate;"></i><i style="width:4.5px;border-radius:3px;background:linear-gradient(180deg,#FFC64B,#FF8A4D);animation:gkb3 1.05s ease-in-out infinite alternate;"></i></span>k</div>
+    <a href="#access" style="text-decoration:none;color:#E7DACE;font-weight:600;font-size:14px;border:1px solid #3C2735;border-radius:999px;padding:8px 15px;">Beta</a>
+  </div>
+
+  <!-- hero -->
+  <section style="padding:34px 22px 8px;text-align:center;">
+    <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#FF9F4D;margin-bottom:16px;">For the curious music lover</div>
+    <h1 style="font-family:'Sora',sans-serif;font-weight:800;font-size:40px;line-height:1.04;letter-spacing:-.02em;color:#F6ECE0;margin:0 0 16px;">Every song is a rabbit hole.</h1>
+    <p style="font-size:16px;line-height:1.6;color:#BCA99B;margin:0 auto 24px;max-width:34ch;">Play any song and <b style="color:#E7DACE;">g<span style="color:#FF8A4D;">eee</span>k</b> unfolds the whole story behind it — the people, the samples, the connections — in real time on Spotify or Apple Music.</p>
+    <a href="#features" style="display:inline-block;margin-top:14px;color:#BCA99B;font-size:14px;font-weight:600;text-decoration:none;">See how it works ↓</a>
+
+    <div style="position:relative;display:flex;justify-content:center;margin-top:30px;">
+      <div style="position:absolute;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(255,138,77,.22),transparent 70%);filter:blur(8px);animation:gkglow 5s ease-in-out infinite;top:46%;left:50%;transform:translate(-50%,-50%);"></div>
+      <div style="position:relative;width:300px;"><dc-import name="AppPhone" cycle="true" style="width:300px;display:block;" hint-size="300px,640px"></dc-import></div>
+    </div>
+  </section>
+
+  <!-- trust -->
+  <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:24px 22px 6px;">
+    <span style="background:#170D13;border:1px solid #2E1C28;border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:600;color:#E7DACE;">Spotify &amp; Apple Music</span>
+    <span style="background:#170D13;border:1px solid #2E1C28;border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:600;color:#E7DACE;">No ads</span>
+    <span style="background:#170D13;border:1px solid #2E1C28;border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:600;color:#E7DACE;">No locked rooms</span>
+  </div>
+
+  <!-- features header -->
+  <section id="features" style="padding:34px 22px 4px;text-align:center;">
+    <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#FF9F4D;margin-bottom:10px;">What you can do</div>
+    <h2 style="font-family:'Sora',sans-serif;font-weight:800;font-size:30px;letter-spacing:-.02em;color:#F6ECE0;margin:0;line-height:1.1;">One song. A whole world behind it.</h2>
+  </section>
+
+  <!-- feature: deep dive -->
+  <section style="padding:24px 16px 0;">
+    <div style="background:linear-gradient(180deg,#170D13,#130A10);border:1px solid #2E1C28;border-radius:22px;padding:24px 20px 26px;text-align:center;">
+      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:#FF9F4D;margin-bottom:10px;">Deep dive</div>
+      <h3 style="font-family:'Baloo 2',sans-serif;font-weight:600;font-size:26px;line-height:1.12;color:#F6ECE0;margin:0 0 10px;">Everything behind the song.</h3>
+      <p style="font-size:15px;line-height:1.6;color:#BCA99B;margin:0 auto 20px;max-width:32ch;">One glanceable fun fact to start — then tap <b style="color:#E7DACE;">Dive deeper</b> and go as far down the rabbit hole as you want.</p>
+      <div style="display:flex;justify-content:center;"><dc-import name="AppPhone" tab="cards" pointer="{{ noPointer }}" style="width:280px;display:block;" hint-size="280px,597px"></dc-import></div>
+    </div>
+  </section>
+
+  <!-- feature: trivia -->
+  <section style="padding:18px 16px 0;">
+    <div style="background:linear-gradient(180deg,#170D13,#130A10);border:1px solid #2E1C28;border-radius:22px;padding:24px 20px 26px;text-align:center;">
+      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:#FF9F4D;margin-bottom:10px;">Trivia &amp; contests</div>
+      <h3 style="font-family:'Baloo 2',sans-serif;font-weight:600;font-size:26px;line-height:1.12;color:#F6ECE0;margin:0 0 10px;">Prove you&rsquo;re the biggest fan.</h3>
+      <p style="font-size:15px;line-height:1.6;color:#BCA99B;margin:0 auto 20px;max-width:32ch;">Play solo, challenge friends in a live room, or take on an artist&rsquo;s superfans worldwide for the global #1 spot.</p>
+      <div style="display:flex;justify-content:center;"><dc-import name="TriviaFriends" style="width:280px;display:block;" hint-size="280px,597px"></dc-import></div>
+    </div>
+  </section>
+
+  <!-- feature: karaoke -->
+  <section style="padding:18px 16px 0;">
+    <div style="background:linear-gradient(180deg,#170D13,#130A10);border:1px solid #2E1C28;border-radius:22px;padding:24px 20px 26px;text-align:center;">
+      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:#FF9F4D;margin-bottom:10px;">Karaoke</div>
+      <h3 style="font-family:'Baloo 2',sans-serif;font-weight:600;font-size:26px;line-height:1.12;color:#F6ECE0;margin:0 0 10px;">Drop the vocals, take the mic.</h3>
+      <p style="font-size:15px;line-height:1.6;color:#BCA99B;margin:0 auto 20px;max-width:32ch;">Flip <b style="color:#E7DACE;">Go vocal-less</b> and AI lifts the lead vocal in a tap, with time-synced lyrics that light up line by line.</p>
+      <div style="display:flex;justify-content:center;"><dc-import name="AppPhone" tab="karaoke" karaoke="true" pointer="{{ noPointer }}" style="width:280px;display:block;" hint-size="280px,597px"></dc-import></div>
+    </div>
+  </section>
+
+  <!-- connect -->
+  <section style="padding:34px 22px 0;text-align:center;">
+    <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#FF9F4D;margin-bottom:10px;">Your music, your way</div>
+    <h2 style="font-family:'Baloo 2',sans-serif;font-weight:600;font-size:26px;line-height:1.14;color:#F6ECE0;margin:0 0 10px;">Connect what you already use.</h2>
+    <p style="font-size:15px;line-height:1.6;color:#BCA99B;margin:0 auto 22px;max-width:34ch;">Link Apple Music or Spotify and geeek follows whatever you&rsquo;re playing. We never put you in a locked room.</p>
+    <div style="display:flex;justify-content:center;gap:26px;">
+      <span style="display:inline-flex;flex-direction:column;align-items:center;gap:10px;"><span style="width:64px;height:64px;border-radius:16px;background:#241620;border:1px solid #3a2530;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="32" height="32" fill="#B9ADA2"><path d="M17.05 12.04c-.03-2.4 1.96-3.55 2.05-3.61-1.12-1.64-2.86-1.86-3.48-1.89-1.48-.15-2.89.87-3.64.87-.75 0-1.91-.85-3.14-.83-1.62.02-3.11.94-3.94 2.39-1.68 2.91-.43 7.22 1.21 9.58.8 1.16 1.76 2.46 3.01 2.41 1.21-.05 1.67-.78 3.13-.78 1.46 0 1.87.78 3.14.76 1.3-.02 2.12-1.18 2.91-2.35.92-1.35 1.3-2.66 1.32-2.73-.03-.01-2.53-.97-2.56-3.84z"></path><path d="M14.86 5.36c.66-.8 1.11-1.92.99-3.03-.95.04-2.11.63-2.79 1.43-.61.71-1.14 1.85-1 2.94 1.06.08 2.14-.54 2.8-1.34z"></path></svg></span><span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10px;letter-spacing:.08em;color:#8A7668;">APPLE MUSIC</span></span>
+      <span style="display:inline-flex;flex-direction:column;align-items:center;gap:10px;"><span style="width:64px;height:64px;border-radius:50%;background:#241620;border:1px solid #3a2530;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="38" height="38"><circle cx="12" cy="12" r="11" fill="#B9ADA2"></circle><g fill="none" stroke="#241620" stroke-width="1.9" stroke-linecap="round"><path d="M5.6 9c4.6-1.3 9.6-.9 13.2 1.4"></path><path d="M6.5 12.6c3.7-1.1 7.7-.7 10.7 1.2"></path><path d="M7.3 15.9c2.7-.8 5.7-.4 8.1 1"></path></g></svg></span><span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10px;letter-spacing:.08em;color:#8A7668;">SPOTIFY</span></span>
+    </div>
+  </section>
+
+  <!-- beta -->
+  <section id="access" style="padding:40px 22px 8px;text-align:center;">
+    <div style="border-top:1px solid #1E121A;padding-top:34px;">
+      <h3 style="font-family:'Baloo 2',sans-serif;font-weight:600;font-size:26px;color:#F6ECE0;margin:0 0 8px;">Be first into the beta.</h3>
+      <p style="color:#BCA99B;font-size:15px;line-height:1.55;margin:0 auto 20px;max-width:34ch;">Family and friends first, then a widening circle of music geeks. Leave your email to join the line.</p>
+      <input id="gk-beta-email" type="email" placeholder="you@email.com" style="width:100%;background:#F5EFE6;border:1px solid #D8C6B2;border-radius:14px;color:#1E1B17;padding:15px 18px;font-size:16px;font-family:inherit;margin-bottom:10px;">
+      <button id="gk-beta-btn" style="width:100%;border:none;background:linear-gradient(180deg,#FFB14D,#FF8A4D);color:#1A0B05;font-weight:700;font-size:16px;padding:16px;border-radius:14px;cursor:pointer;font-family:inherit;">Get early access</button>
+      <div id="gk-beta-msg" style="min-height:18px;margin-top:12px;font-size:14px;color:#BCA99B;"></div>
+    </div>
+  </section>
+
+  <!-- footer -->
+  <footer style="padding:30px 22px 26px;text-align:center;">
+    <div style="display:inline-flex;align-items:center;font-family:'Space Grotesk';font-weight:700;font-size:18px;letter-spacing:-.03em;color:#F6ECE0;margin-bottom:14px;">g<span style="display:inline-flex;align-items:flex-end;gap:2px;height:12px;margin:0 2px;"><i style="width:3.5px;border-radius:2px;background:linear-gradient(180deg,#FFC64B,#FF8A4D);animation:gkb1 .9s ease-in-out infinite alternate;"></i><i style="width:3.5px;border-radius:2px;background:linear-gradient(180deg,#FFC64B,#FF8A4D);animation:gkb2 .78s ease-in-out infinite alternate;"></i><i style="width:3.5px;border-radius:2px;background:linear-gradient(180deg,#FFC64B,#FF8A4D);animation:gkb3 1.05s ease-in-out infinite alternate;"></i></span>k</div>
+    <div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;font-size:13px;color:#8A7668;margin-bottom:14px;"><a href="#" class="gk-soon" title="Coming soon" style="color:#8A7668;text-decoration:none;">FAQs</a><a href="#" class="gk-soon" title="Coming soon" style="color:#8A7668;text-decoration:none;">About</a><a href="#" class="gk-soon" title="Coming soon" style="color:#8A7668;text-decoration:none;">Privacy</a><a href="#" class="gk-soon" title="Coming soon" style="color:#8A7668;text-decoration:none;">Contact</a></div>
+    <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10.5px;letter-spacing:.08em;color:#5E4E44;text-transform:uppercase;">Geek out about music — then go live.</div>
+  </footer>
+
+</div>
+
+<template id="__bundler_thumbnail" data-bg-color="#0E070C">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#0E070C"/>
+    <g transform="translate(522,318)">
+      <rect x="0" y="44" width="36" height="84" rx="18" fill="#FFC64B"/>
+      <rect x="56" y="0" width="36" height="172" rx="18" fill="#FF9F4D"/>
+      <rect x="112" y="64" width="36" height="108" rx="18" fill="#FF7A3C"/>
+    </g>
+    <text x="600" y="572" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="68" fill="#F6ECE0">geeek</text>
+  </svg>
+</template></x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals(){ return { noPointer: false }; }
+}
+</script>
+<script>
+(function(){
+  function ok(s){return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);}
+  function submit(){
+    var e=document.getElementById("gk-beta-email"),m=document.getElementById("gk-beta-msg"),b=document.getElementById("gk-beta-btn");
+    if(!e||!m)return;
+    var email=(e.value||"").trim();
+    if(!ok(email)){m.style.color="#E55A48";m.textContent="Enter a valid email.";return;}
+    if(b)b.disabled=true;m.style.color="#BCA99B";m.textContent="Adding you…";
+    fetch("https://app.geeek.fm/api/beta",{method:"POST",headers:{"Content-Type":"text/plain;charset=UTF-8"},body:JSON.stringify({email:email})})
+      .then(function(r){return r.json();}).then(function(j){
+        if(j&&j.ok){m.style.color="#54C98A";m.textContent="You're on the list — we'll be in touch.";e.value="";}
+        else{m.style.color="#E55A48";m.textContent=(j&&j.error)||"Couldn't add you. Try again.";if(b)b.disabled=false;}
+      }).catch(function(){m.style.color="#E55A48";m.textContent="Couldn't reach the server. Try again.";if(b)b.disabled=false;});
+  }
+  document.addEventListener("click",function(ev){var t=ev.target;if(t&&t.closest&&t.closest("#gk-beta-btn")){ev.preventDefault();submit();}});
+  document.addEventListener("keydown",function(ev){if(ev.key==="Enter"){var t=ev.target;if(t&&t.id==="gk-beta-email"){ev.preventDefault();submit();}}});
+  function showSoon(){var t=document.getElementById("gk-soon-toast");if(!t){t=document.createElement("div");t.id="gk-soon-toast";t.style.cssText="position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#1E121A;border:1px solid #3C2735;color:#E7DACE;font-family:'Space Grotesk',sans-serif;font-size:14px;padding:11px 18px;border-radius:999px;z-index:99990;box-shadow:0 10px 30px -10px rgba(0,0,0,.6);opacity:0;transition:opacity .2s";document.body.appendChild(t);}t.textContent="Coming soon";requestAnimationFrame(function(){t.style.opacity="1";});clearTimeout(t._h);t._h=setTimeout(function(){t.style.opacity="0";},1800);}
+  document.addEventListener("click",function(ev){var a=ev.target&&ev.target.closest&&ev.target.closest(".gk-soon");if(a){ev.preventDefault();showSoon();}});
+})();
+</script>
+</body>
+</html>
