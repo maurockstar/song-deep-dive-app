@@ -33,9 +33,11 @@
     }
   }
   function setPlayIcon(on) {
-    $("gk-playbtn").innerHTML = on
+    var svg = on
       ? '<svg viewBox="0 0 24 24" width="26" height="26" fill="#1A0B05"><rect x="6.5" y="5" width="4" height="14" rx="1.2"/><rect x="13.5" y="5" width="4" height="14" rx="1.2"/></svg>'
       : '<svg viewBox="0 0 24 24" width="26" height="26" fill="#1A0B05"><path d="M8 5v14l11-7z"/></svg>';
+    $("gk-playbtn").innerHTML = svg;
+    var lb = $("gk-lb-play"); if (lb) lb.innerHTML = svg; // keep the full-screen cover's play/pause in sync
   }
   function setProgress(progressMs, durationMs) {
     var pct = durationMs ? Math.min(100, progressMs / durationMs * 100) : 0;
@@ -503,6 +505,7 @@
     $("gk-lb-title").textContent = title || (cur && cur.title) || "";
     $("gk-lb-sub").textContent = sub || (cur && cur.artist) || "";
     $("gk-lightbox").classList.add("open");
+    setPlayIcon(playing); // reflect current play/pause state on open
   }
   function lightboxOpen() { var lb = $("gk-lightbox"); return !!(lb && lb.classList.contains("open")); }
   // Keep the open cover lightbox in sync with the live track (e.g. after next/prev).
