@@ -56,11 +56,14 @@
 
   function mount() {
     if (document.getElementById("gkGate")) return;
+    root.classList.add("gk-hide");
     (document.body || document.documentElement).appendChild(root);
     wire();
     check();
   }
-  function hideGate() { root.classList.add("gk-hide"); }
+  function removePre() { var e = document.getElementById("gk-pre"); if (e && e.parentNode) e.parentNode.removeChild(e); }
+  function hideGate() { root.classList.add("gk-hide"); removePre(); }
+  function showGate() { root.classList.remove("gk-hide"); removePre(); }
   function setMsg(t, c) { var m = root.querySelector("#gkMsg"); m.style.color = c || "rgba(255,255,255,.7)"; m.innerHTML = t || ""; }
 
   function loadAppleJs() {
@@ -131,6 +134,7 @@
         gateLog("session", { enabled: j && j.enabled, authed: j && j.authed, hasApple: !!(j && j.appleClientId), user: j && j.user, seenCookie: j && j.seenCookie, tokenLen: j && j.tokenLen });
         if (!j || j.enabled === false || j.authed === true) { hideGate(); return; }
         APPLE_CLIENT_ID = j.appleClientId || "";
+        showGate();
         loadAppleJs().then(initApple).catch(function () {});
       })
       .catch(function () { hideGate(); }); // fail open to the app; data APIs still enforce

@@ -47,8 +47,10 @@
     '<div class="msg" id="gkMsg"></div>' +
     '</div></div>';
 
-  function mount() { if (document.getElementById("gkGate")) return; (document.body || document.documentElement).appendChild(root); wire(); check(); }
-  function hideGate() { root.classList.add("gk-hide"); }
+  function mount() { if (document.getElementById("gkGate")) return; root.classList.add("gk-hide"); (document.body || document.documentElement).appendChild(root); wire(); check(); }
+  function removePre() { var e = document.getElementById("gk-pre"); if (e && e.parentNode) e.parentNode.removeChild(e); }
+  function hideGate() { root.classList.add("gk-hide"); removePre(); }
+  function showGate() { root.classList.remove("gk-hide"); removePre(); }
   function setMsg(t, c) { var m = root.querySelector("#gkMsg"); m.style.color = c || "rgba(255,255,255,.7)"; m.innerHTML = t || ""; }
 
   function loadAppleJs() {
@@ -75,7 +77,10 @@
       return fetch(api("/apple-auth"), { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id_token: idt }) })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (out) {
-          if (out.ok && out.j && out.j.ok) { setMsg("Welcome — opening geeek…", "#7CE2A8"); setTimeout(function () { location.reload(); }, 400); }
+          if (out.ok && out.j && out.j.ok) {
+            if (out.j.token) { try { document.cookie = "gk_sess=" + out.j.token + "; path=/; domain=.geeek.fm; secure; samesite=lax; max-age=7776000"; } catch (e) {} }
+            setMsg("Welcome — opening geeek…", "#7CE2A8"); setTimeout(function () { location.reload(); }, 400);
+          }
           else { setMsg((out.j && out.j.error) || "This Apple ID isn't approved yet.", "#FF8C7A"); }
         });
     }).catch(function (e) {
@@ -96,6 +101,7 @@
       .then(function (j) {
         if (!j || j.enabled === false || j.authed === true) { hideGate(); return; }
         APPLE_CLIENT_ID = j.appleClientId || "";
+        showGate();
         loadAppleJs().then(initApple).catch(function () {});
       })
       .catch(function () { hideGate(); });
