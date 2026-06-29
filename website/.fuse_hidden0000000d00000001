@@ -1,16 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-<!-- geeek website v1.1 (v15 redesign) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>geeek — for the music you can't live without</title>
-<script src="./gate.js?v=1.0"></script>
 <script src="./support.js"></script>
 </head>
 <body>
-<div id="gk-pre" style="position:fixed;inset:0;background:#000;z-index:99998"></div>
-<script>setTimeout(function(){var e=document.getElementById("gk-pre");if(e&&e.parentNode)e.parentNode.removeChild(e);},9000);</script>
 <x-dc>
 <helmet>
 <link rel="preconnect" href="https://fonts.googleapis.com">
