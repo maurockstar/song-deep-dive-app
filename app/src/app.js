@@ -381,34 +381,55 @@
     }, 1600);
   }
 
-  // ---- karaoke (full-screen lyrics, demo) ----
-  var KAR = { stage: null, i: 3, vocal: false };
-  var KAR_LINES = ["the opening line sets the scene", "and the next line follows in time", "watch each word turn warm and bright", "now the chorus opens wide", "sing it loud, you know this part", "the bridge brings it all back home", "one more verse before the end"];
-  function closeKaraoke() { if (KAR.stage && KAR.stage.parentNode) { KAR.stage.parentNode.removeChild(KAR.stage); KAR.stage = null; } document.body.classList.remove("kar-on"); }
+  // ---- karaoke (full-screen auto-scrolling lyrics, demo) ----
+  var KAR = { stage: null, i: 0, vocal: false, timer: null };
+  var KAR_LINES = [
+    "the needle drops and the room goes still",
+    "a hush, then the first warm chord",
+    "you feel it rising in your chest",
+    "now the words arrive — sing them out",
+    "every line glows as it comes",
+    "the chorus opens up the sky",
+    "hands in the air, voices as one",
+    "the bridge pulls it all back home",
+    "one last breath before the end",
+    "let the final note ring out"
+  ];
+  function stopKar() { if (KAR.timer) { clearInterval(KAR.timer); KAR.timer = null; } }
+  function closeKaraoke() { stopKar(); if (KAR.stage && KAR.stage.parentNode) { KAR.stage.parentNode.removeChild(KAR.stage); KAR.stage = null; } document.body.classList.remove("kar-on"); }
   function renderKaraoke() {
     closeKaraoke();
     document.body.classList.add("kar-on");
+    KAR.i = 0;
     var micSvg = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3" fill="currentColor" stroke="none"/><path d="M6 11a6 6 0 0 0 12 0"/><line x1="12" y1="17.5" x2="12" y2="21"/><line x1="8.5" y1="21" x2="15.5" y2="21"/></svg>';
     var stage = document.createElement("div");
     stage.className = "kar-stage";
     stage.innerHTML = '<div class="kar-top"><div class="kar-title"><span style="color:var(--sun)">' + micSvg + '</span><b>Karaoke</b><span class="preview-chip" style="margin-left:6px">preview</span></div>'
       + '<button class="kar-toggle" id="kar-toggle"><span class="ktxt">Go vocal-less</span><span class="kar-track"><span class="kar-knob"></span></span></button></div>'
-      + '<div class="kar-lyrics" id="kar-lyrics"></div>';
+      + '<div class="kar-lyrics" id="kar-lyrics"><div class="kar-scroll" id="kar-scroll"></div></div>';
     document.body.appendChild(stage);
     KAR.stage = stage;
-    paintLyrics();
+    buildLyrics();
+    requestAnimationFrame(function () { requestAnimationFrame(highlightLyric); }); // center after layout
+    KAR.timer = setInterval(advanceLyric, 2700);
     $("kar-toggle").addEventListener("click", function () {
       KAR.vocal = !KAR.vocal;
       this.classList.toggle("on", KAR.vocal);
       this.querySelector(".ktxt").textContent = KAR.vocal ? "Vocals off" : "Go vocal-less";
-      KAR.i = (KAR.i + 1) % KAR_LINES.length;
-      paintLyrics();
     });
   }
-  function paintLyrics() {
-    var box = $("kar-lyrics"); if (!box) return;
-    box.innerHTML = KAR_LINES.map(function (t, i) { return '<div class="kline' + (i === KAR.i ? " on" : "") + '">' + esc(t) + '</div>'; }).join("");
+  function buildLyrics() {
+    var scroll = $("kar-scroll"); if (!scroll) return;
+    scroll.innerHTML = KAR_LINES.map(function (t) { return '<div class="kline">' + esc(t) + '</div>'; }).join("");
   }
+  function highlightLyric() {
+    var scroll = $("kar-scroll"); if (!scroll) return;
+    var lines = scroll.children;
+    for (var i = 0; i < lines.length; i++) lines[i].classList.toggle("on", i === KAR.i);
+    var act = lines[KAR.i];
+    if (act) scroll.style.transform = "translateY(" + (-(act.offsetTop + act.offsetHeight / 2)) + "px)";
+  }
+  function advanceLyric() { KAR.i = (KAR.i + 1) % KAR_LINES.length; highlightLyric(); }
 
   function renderTab(name) {
     if (name === "cards") { cur ? loadDeepDive(cur) : welcome(); }
