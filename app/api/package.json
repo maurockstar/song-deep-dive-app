@@ -1,6 +1,6 @@
 {
   "name": "geeek-api",
-  "version": "0.1.0",
+  "version": "0.9.1",
   "description": "Azure Functions API for geeek.",
   "main": "deepdive/index.js",
   "engines": { "node": ">=18" },

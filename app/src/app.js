@@ -1,4 +1,4 @@
-// geeek — app bootstrap & UI wiring (v0.8 redesign)
+// geeek — app bootstrap & UI wiring (v0.9.1)
 (function () {
   "use strict";
   var CFG = window.SDD_CONFIG;
