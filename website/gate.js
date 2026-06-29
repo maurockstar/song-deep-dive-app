@@ -75,17 +75,17 @@
       if (!idt) { setMsg("No token returned from Apple.", "#FF8C7A"); return; }
       setMsg("Verifying…");
       return fetch(api("/apple-auth"), { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id_token: idt }) })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }, function () { return { ok: r.ok, status: r.status, j: null }; }); })
         .then(function (out) {
           if (out.ok && out.j && out.j.ok) {
             if (out.j.token) { try { document.cookie = "gk_sess=" + out.j.token + "; path=/; domain=.geeek.fm; secure; samesite=lax; max-age=7776000"; } catch (e) {} }
             setMsg("Welcome — opening geeek…", "#7CE2A8"); setTimeout(function () { location.reload(); }, 400);
           }
-          else { setMsg((out.j && out.j.error) || "This Apple ID isn't approved yet.", "#FF8C7A"); }
+          else { setMsg("auth " + out.status + ": " + ((out.j && out.j.error) || "rejected") + (out.j && out.j.email ? " (" + out.j.email + ")" : ""), "#FF8C7A"); }
         });
     }).catch(function (e) {
       if (e && (e.error === "popup_closed_by_user" || e.error === "user_cancelled_authorize")) { setMsg(""); return; }
-      setMsg("Apple sign-in didn't complete. Try again.", "#FF8C7A");
+      setMsg("err: " + (e && (e.error || e.message || String(e))), "#FF8C7A");
     });
   }
   function wire() {
