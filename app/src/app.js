@@ -404,11 +404,12 @@
     var micSvg = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3" fill="currentColor" stroke="none"/><path d="M6 11a6 6 0 0 0 12 0"/><line x1="12" y1="17.5" x2="12" y2="21"/><line x1="8.5" y1="21" x2="15.5" y2="21"/></svg>';
     var stage = document.createElement("div");
     stage.className = "kar-stage";
-    stage.innerHTML = '<div class="kar-top"><div class="kar-title"><span style="color:var(--sun)">' + micSvg + '</span><b>Karaoke</b><span class="preview-chip" style="margin-left:6px">preview</span></div>'
+    stage.innerHTML = '<div class="kar-top"><div class="kar-title"><button class="kar-back" id="kar-back" aria-label="Back to app"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button><span style="color:var(--sun)">' + micSvg + '</span><b>Karaoke</b><span class="preview-chip" style="margin-left:6px">preview</span></div>'
       + '<button class="kar-toggle" id="kar-toggle"><span class="ktxt">Go vocal-less</span><span class="kar-track"><span class="kar-knob"></span></span></button></div>'
       + '<div class="kar-lyrics" id="kar-lyrics"><div class="kar-scroll" id="kar-scroll"></div></div>';
     document.body.appendChild(stage);
     KAR.stage = stage;
+    var kb = $("kar-back"); if (kb) kb.addEventListener("click", function () { setActiveTab("cards"); });
     buildLyrics();
     requestAnimationFrame(function () { requestAnimationFrame(highlightLyric); }); // center after layout
     KAR.timer = setInterval(advanceLyric, 2700);
