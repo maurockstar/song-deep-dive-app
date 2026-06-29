@@ -125,7 +125,7 @@
     fetch(api("/session"), { credentials: "include", cache: "no-store" })
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        gateLog("session", { enabled: j && j.enabled, authed: j && j.authed, hasApple: !!(j && j.appleClientId), user: j && j.user });
+        gateLog("session", { enabled: j && j.enabled, authed: j && j.authed, hasApple: !!(j && j.appleClientId), user: j && j.user, seenCookie: j && j.seenCookie, tokenLen: j && j.tokenLen });
         if (!j || j.enabled === false || j.authed === true) { hideGate(); return; }
         APPLE_CLIENT_ID = j.appleClientId || "";
         loadAppleJs().then(initApple).catch(function () {});

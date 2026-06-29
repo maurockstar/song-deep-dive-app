@@ -7,11 +7,12 @@ module.exports = async function (context, req) {
   if (!A.isEnabled()) { context.res = { status: 200, headers, body: { enabled: false, authed: true } }; return; }
   const s = A.sessionFromReq(req);
   const appleClientId = A.appleClientId();
+  const raw = A.parseCookies(req)[A.COOKIE];
   context.res = {
     status: 200,
     headers,
     body: s
-      ? { enabled: true, authed: true, user: s.u, appleClientId: appleClientId }
-      : { enabled: true, authed: false, appleClientId: appleClientId }
+      ? { enabled: true, authed: true, user: s.u, appleClientId: appleClientId, seenCookie: !!raw, tokenLen: raw ? raw.length : 0 }
+      : { enabled: true, authed: false, appleClientId: appleClientId, seenCookie: !!raw, tokenLen: raw ? raw.length : 0 }
   };
 };

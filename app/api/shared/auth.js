@@ -134,6 +134,21 @@ function cookieHeader(token, maxAgeSec) {
   return parts.join("; ");
 }
 
+// Azure Functions / SWA native cookie object (more reliable than a raw Set-Cookie header).
+function cookieObject(token, maxAgeSec) {
+  var c = {
+    name: COOKIE,
+    value: token || "",
+    path: "/",
+    httpOnly: true,
+    secure: true,
+    sameSite: "Lax",
+    maxAge: (maxAgeSec != null ? maxAgeSec : SESSION_DAYS * 86400)
+  };
+  if (COOKIE_DOMAIN) c.domain = COOKIE_DOMAIN;
+  return c;
+}
+
 // CORS for the website (geeek.fm) calling the app's auth endpoints cross-origin.
 // Credentialed requests require an explicit origin echo (never "*").
 const ALLOWED_ORIGINS = (process.env.AUTH_ALLOWED_ORIGINS
@@ -166,5 +181,5 @@ function blockIfUnauthed(context, req) {
 
 module.exports = {
   COOKIE, SESSION_DAYS, isEnabled, loadAllow, appleClientId, appleAllowed, verifyAppleIdToken,
-  signSession, verifySession, parseCookies, sessionFromReq, cookieHeader, corsHeaders, blockIfUnauthed
+  signSession, verifySession, parseCookies, sessionFromReq, cookieHeader, cookieObject, corsHeaders, blockIfUnauthed
 };

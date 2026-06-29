@@ -8,7 +8,7 @@ module.exports = async function (context, req) {
   if (req.method === "OPTIONS") { context.res = { status: 204, headers }; return; }
 
   if (req.query && (req.query.logout === "1" || req.query.logout === "true")) {
-    context.res = { status: 200, headers: Object.assign({}, headers, { "Set-Cookie": A.cookieHeader("", 0) }), body: { ok: true } };
+    context.res = { status: 200, headers: Object.assign({}, headers, { "Set-Cookie": A.cookieHeader("", 0) }), cookies: [A.cookieObject("", 0)], body: { ok: true } };
     return;
   }
 

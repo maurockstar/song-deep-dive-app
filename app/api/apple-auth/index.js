@@ -36,6 +36,7 @@ module.exports = async function (context, req) {
   context.res = {
     status: 200,
     headers: Object.assign({}, headers, { "Set-Cookie": A.cookieHeader(token) }),
+    cookies: [A.cookieObject(token)],
     body: { ok: true, user: { email: email || null, role: match.role || "user" } }
   };
 };
