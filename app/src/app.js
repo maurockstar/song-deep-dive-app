@@ -425,13 +425,13 @@
         lastPlayingId = track.id; manualMode = false; cur = track;
         pstate = { progressMs: track.progressMs || 0, durationMs: track.durationMs || 0, playing: !!track.isPlaying, at: Date.now() };
         playing = !!track.isPlaying; setPlayIcon(playing); tickProgress();
-        setHero(track); updateShareLink(track);
+        setHero(track); updateShareLink(track); updateLightboxLive(track);
         if (curTab === "cards") loadDeepDive(track);
         else if (curTab === "media") loadMedia(track);
       } else if (!manualMode) {
         if (track) {
           pstate = { progressMs: track.progressMs || 0, durationMs: track.durationMs || 0, playing: !!track.isPlaying, at: Date.now() };
-          playing = !!track.isPlaying; setPlayIcon(playing); tickProgress(); setHero(track); updateShareLink(track);
+          playing = !!track.isPlaying; setPlayIcon(playing); tickProgress(); setHero(track); updateShareLink(track); updateLightboxLive(track);
           if (!cur) cur = track;
         } else if (!cur) { setHero(null); pstate = { progressMs: 0, durationMs: 0, playing: false, at: Date.now() }; setProgress(0, 0); setPlayIcon(false); }
       }
@@ -503,6 +503,14 @@
     $("gk-lb-title").textContent = title || (cur && cur.title) || "";
     $("gk-lb-sub").textContent = sub || (cur && cur.artist) || "";
     $("gk-lightbox").classList.add("open");
+  }
+  function lightboxOpen() { var lb = $("gk-lightbox"); return !!(lb && lb.classList.contains("open")); }
+  // Keep the open cover lightbox in sync with the live track (e.g. after next/prev).
+  function updateLightboxLive(t) {
+    if (!t || !lightboxOpen()) return;
+    if (t.art) $("gk-lb-img").style.backgroundImage = 'url("' + t.art + '")';
+    $("gk-lb-title").textContent = t.title || "";
+    $("gk-lb-sub").textContent = t.artist || "";
   }
 
   // ---------- transport ----------
