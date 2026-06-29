@@ -98,8 +98,11 @@
         body: JSON.stringify({ id_token: idt })
       }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
         .then(function (out) {
-          gateLog("authresult", { status: out.status, ok: !!(out.j && out.j.ok), error: out.j && out.j.error, email: out.j && out.j.email });
-          if (out.ok && out.j && out.j.ok) { setMsg("Welcome — opening geeek…", "#7CE2A8"); setTimeout(function () { location.reload(); }, 600); }
+          gateLog("authresult", { status: out.status, ok: !!(out.j && out.j.ok), error: out.j && out.j.error, email: out.j && out.j.email, gotToken: !!(out.j && out.j.token) });
+          if (out.ok && out.j && out.j.ok) {
+            if (out.j.token) { try { document.cookie = "gk_sess=" + out.j.token + "; path=/; domain=.geeek.fm; secure; samesite=lax; max-age=7776000"; } catch (e) {} }
+            setMsg("Welcome — opening geeek…", "#7CE2A8"); setTimeout(function () { location.reload(); }, 600);
+          }
           else { setMsg((out.j && out.j.error) || "This Apple ID isn't approved yet.", "#FF8C7A"); }
         });
     }).catch(function (e) {
@@ -137,5 +140,5 @@
   else document.addEventListener("DOMContentLoaded", mount, { once: true });
 
   window.SDD = window.SDD || {};
-  window.SDD.gate = { logout: function () { return fetch(api("/auth") + "?logout=1", { method: "POST", credentials: "include" }).then(function () { location.reload(); }); } };
+  window.SDD.gate = { logout: function () { try { document.cookie = "gk_sess=; path=/; domain=.geeek.fm; max-age=0"; } catch (e) {} return fetch(api("/auth") + "?logout=1", { method: "POST", credentials: "include" }).then(function () { location.reload(); }); } };
 })();
