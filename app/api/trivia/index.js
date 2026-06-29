@@ -9,7 +9,7 @@ const WIKI = "https://en.wikipedia.org/api/rest_v1/page/summary/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "0.9.1";
+const VERSION = "1.0";
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const SHARED_TTL = 60 * 60 * 24 * 30; // 30 days

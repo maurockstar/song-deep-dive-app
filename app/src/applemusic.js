@@ -92,7 +92,7 @@
     return new Promise(function (resolve, reject) {
       function go() {
         L("configure:start", { musicKitVersion: (window.MusicKit && MusicKit.version) || null });
-        MusicKit.configure({ developerToken: token, app: { name: "geeek", build: "0.9.1" } })
+        MusicKit.configure({ developerToken: token, app: { name: "geeek", build: "1.0" } })
           .then(function (m) { L("configure:ok", { storefront: m && (m.storefrontId || m.storefrontCountryCode) }); resolve(m); })
           .catch(function (err) { L("configure:fail", err, "error"); reject(err); });
       }

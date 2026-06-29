@@ -8,7 +8,7 @@
 <meta name="description" content="The story, the people, and the connections behind the song you're playing.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Baloo+2:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Baloo+2:wght@500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box}
   html,body{margin:0;background-color:#0E070C}
@@ -17,7 +17,8 @@
     --ink:#E7DACE; --ink-hi:#F6ECE0; --muted:#BCA99B; --dim:#8A7668; --faint:#5E4E44;
     --sun:#FF9F4D; --sun-300:#FFB14D; --sun-500:#FF8A4D; --on-accent:#1A0B05;
     --gold:#FFC64B; --deep:#FF5A3C; --hover:#FFD08A; --glow:255,138,77; --glow2:255,159,77;
-    --sans:'Space Grotesk',system-ui,sans-serif; --round:'Baloo 2',sans-serif; --mono:'JetBrains Mono',monospace;
+    --faded:#E3A368; --live:#54C98A; --progress:#FFB14D; --concept:#46C8D8;
+    --sans:'Space Grotesk',system-ui,sans-serif; --round:'Baloo 2',sans-serif; --label:'Sora',sans-serif;
   }
   body{font-family:var(--sans);color:var(--ink);min-height:100vh;min-height:100dvh;
     background:radial-gradient(1000px 480px at 82% -12%,rgba(var(--glow),.14),transparent 60%),linear-gradient(180deg,#120A10,#0E070C);
@@ -46,10 +47,16 @@
   /* collapsible panels */
   .panel-card{display:none;border:1px solid var(--border2);background:var(--card2);border-radius:14px;padding:16px 18px;margin-bottom:18px}
   .panel-card.open{display:block}
-  .mono-kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--sun);margin-bottom:6px}
+  .mono-kicker{font-family:var(--label);font-weight:600;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--sun);margin-bottom:6px}
+  /* faded-orange section title (no underline bar) */
+  .sec-title{font-family:var(--round);font-weight:600;font-size:20px;color:var(--faded)}
+  /* small preview chip */
+  .preview-chip{display:inline-block;font-family:var(--label);font-weight:600;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--progress);background:rgba(255,177,77,.10);border:1px solid rgba(255,177,77,.28);border-radius:999px;padding:3px 9px;vertical-align:middle}
   .field{position:relative}
   .field svg{position:absolute;left:14px;top:50%;transform:translateY(-50%)}
-  .field input{width:100%;background:#F5EFE6;border:1px solid #D8C6B2;border-radius:12px;color:#1E1B17;padding:14px 16px 14px 46px;font-size:16px;font-family:inherit}
+  .field input{width:100%;background:#F5EFE6;border:1px solid #D8C6B2;border-radius:12px;color:#1E1B17;padding:14px 16px 14px 46px;font-size:16px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+  .field input:focus{outline:none;border-color:var(--sun-500);box-shadow:0 0 0 3px rgba(var(--glow2),.25)}
+  .suggest .sec-label{font-family:var(--label);font-weight:600;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:2px 6px 6px}
   .suggest{list-style:none;margin:10px 0 0;padding:0;max-height:300px;overflow-y:auto}
   .suggest li{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;cursor:pointer}
   .suggest li:hover,.suggest li.active{background:var(--card)}
@@ -57,7 +64,7 @@
   .suggest .st{font-size:14px;color:var(--ink-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .suggest .sa{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .share-row{display:flex;gap:10px;margin-top:13px}
-  .share-row input{flex:1;min-width:0;background:var(--card);border:1px solid var(--border2);border-radius:10px;color:var(--muted);padding:11px 12px;font-family:var(--mono);font-size:13px}
+  .share-row input{flex:1;min-width:0;background:var(--card);border:1px solid var(--border2);border-radius:10px;color:var(--muted);padding:11px 12px;font-family:var(--sans);font-size:13px}
   .btn-copy{flex:none;border:1px solid var(--border2);background:var(--card);color:var(--ink);border-radius:10px;padding:0 16px;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px}
 
   /* hero */
@@ -67,18 +74,21 @@
   .np-img{width:104px;height:104px;border-radius:15px;border:2px solid var(--bg);box-sizing:border-box;background:linear-gradient(180deg,var(--gold),var(--sun-500)) center/cover no-repeat}
   .np-expand{position:absolute;right:8px;bottom:8px;width:24px;height:24px;border-radius:7px;background:rgba(8,4,2,.55);display:flex;align-items:center;justify-content:center}
   .np-title{font-family:var(--round);font-weight:600;font-size:30px;line-height:1.05;color:var(--ink-hi);margin-top:14px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .np-artist{color:var(--muted);font-size:18px;margin-top:3px}
+  .np-artist{color:var(--ink);font-weight:600;font-size:16px;margin-top:3px}
 
   /* player */
   .player{margin-top:20px}
   .bar-row{display:flex;align-items:center;gap:12px}
-  .time{font-family:var(--mono);font-size:12px;color:var(--dim);min-width:34px}
+  .time{font-family:var(--label);font-weight:600;font-size:12px;color:var(--ink);min-width:34px}
   .track{flex:1;height:5px;border-radius:3px;background:var(--border);position:relative}
   .fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:3px;background:linear-gradient(90deg,var(--gold),var(--sun-500))}
   .handle{position:absolute;left:0;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;border-radius:50%;background:var(--sun-300);box-shadow:0 0 8px -1px rgba(var(--glow2),.7)}
-  .transport{display:flex;align-items:center;justify-content:center;gap:30px;margin-top:14px}
+  .transport{display:flex;align-items:center;justify-content:center;gap:22px;margin-top:14px}
   .t-btn{background:none;border:none;color:var(--sun);cursor:pointer;padding:4px;display:inline-flex;transition:color .15s}
   .t-btn:hover{color:var(--hover)}
+  .t-btn-muted{background:none;border:none;color:var(--dim);cursor:pointer;padding:4px;display:inline-flex;transition:color .15s}
+  .t-btn-muted:hover{color:var(--muted)}
+  .t-btn-muted.on{color:var(--sun)}
   .play-btn{width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(180deg,var(--sun-300),var(--sun-500));box-shadow:0 0 22px -6px rgba(var(--glow),.6);display:inline-flex;align-items:center;justify-content:center}
   .pmsg{text-align:center;color:var(--sun);font-size:13px;line-height:1.4;margin-top:10px;min-height:1em;opacity:0;transition:opacity .2s}
   .pmsg.show{opacity:1}
@@ -89,13 +99,23 @@
   .gk-tab.active{background:linear-gradient(180deg,var(--sun-300),var(--sun-500));border-color:transparent;color:var(--on-accent)}
   .tab-label{display:none}
 
-  .hint{color:var(--dim);font-size:16px;margin:16px 2px 14px;text-align:center;min-height:1.2em}
+  .hint{font-family:var(--round);font-weight:600;color:var(--faded);font-size:16px;margin:16px 2px 14px;text-align:center;min-height:1.2em}
   .surface{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:16px;padding:20px 22px;min-height:230px}
 
   /* deep-dive cards */
   .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .dd-card{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column}
-  .dd-kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--sun);margin-bottom:6px}
+  .dd-kicker{font-family:var(--label);font-weight:600;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--sun);margin-bottom:6px}
+
+  /* fun-fact deep dive */
+  .ff-card{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:15px 16px}
+  .ff-kicker{font-family:var(--label);font-weight:600;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--sun);margin-bottom:8px}
+  .ff-fact{font-family:var(--round);font-weight:600;font-size:19px;line-height:1.3;color:var(--ink-hi)}
+  .ff-pager{display:flex;gap:5px;margin-top:14px}
+  .ff-pager span{height:4px;flex:1;border-radius:2px;background:var(--border)}
+  .ff-pager span.lit{background:var(--sun-500)}
+  .ff-extra{margin-top:12px;color:var(--muted);font-size:13.5px;line-height:1.55;border-top:1px dashed var(--border2);padding-top:11px}
+  .ff-deeper{display:block;width:fit-content;margin:16px auto 4px;padding:11px 22px;border:none;border-radius:999px;text-align:center;background:linear-gradient(180deg,var(--sun-300),var(--sun-500));color:var(--on-accent);font-family:var(--sans);font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 0 18px -6px rgba(var(--glow),.6)}
   .dd-title{font-weight:700;font-size:16px;color:var(--ink-hi);margin-bottom:6px}
   .dd-scroll{overflow:visible}
   .suggest{scrollbar-width:none;-ms-overflow-style:none}
@@ -112,15 +132,52 @@
   .lrow .av{width:54px;height:54px;border-radius:50%;flex:none;background:linear-gradient(180deg,var(--gold),var(--sun-500)) center/cover}
   .lrow .lt{font-family:var(--round);font-size:21px;color:var(--ink-hi)}
   .lrow .ls{color:var(--muted);font-size:15px}
+  .lrow .la{color:var(--sun);font-weight:600;font-size:14px;flex:none}
 
   /* media grid */
   .media-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
   .mtile{position:relative;aspect-ratio:1/1;border-radius:12px;border:1px solid var(--border);overflow:hidden;cursor:pointer;background:#1c1018 center/cover no-repeat}
-  .mtile .mcap{position:absolute;left:0;right:0;bottom:0;padding:6px 8px;font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:#fff;background:linear-gradient(0deg,rgba(8,4,2,.6),transparent)}
+  .mtile .mcap{position:absolute;left:0;right:0;bottom:0;padding:6px 8px;font-family:var(--label);font-weight:600;font-size:10px;letter-spacing:.04em;color:#fff;background:linear-gradient(0deg,rgba(8,4,2,.7),transparent)}
+  .mtile .micon{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .mtile .mplay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .mtile .mplay span{width:32px;height:32px;border-radius:50%;background:rgba(10,5,3,.5);display:flex;align-items:center;justify-content:center}
+  .media-foot{font-family:var(--label);font-weight:600;color:var(--dim);font-size:10px;letter-spacing:.06em;margin-top:12px;text-align:center}
 
   /* coming soon */
   .soon{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:14px 6px}
-  .soon-badge{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--on-accent);background:var(--sun-300);border-radius:999px;padding:3px 10px}
+  .soon-badge{font-family:var(--label);font-weight:700;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--on-accent);background:var(--sun-300);border-radius:999px;padding:3px 10px}
+
+  /* shazam */
+  .shz-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding:14px 0 2px}
+  .shz-btn{width:92px;height:92px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 0 8px rgba(58,42,52,.55),0 8px 22px -10px rgba(0,0,0,.6)}
+  .shz-label{font-family:var(--round);font-weight:600;font-size:19px;color:var(--ink-hi)}
+  .shz-sub{color:var(--dim);font-size:13px;max-width:36ch;line-height:1.5}
+
+  /* karaoke (lyrics-as-hero, full screen) */
+  .kar-stage{position:fixed;inset:0;z-index:40;background:radial-gradient(900px 460px at 82% -12%,rgba(var(--glow),.12),transparent 60%),linear-gradient(180deg,#120A10,#0E070C)}
+  .kar-top{position:absolute;left:16px;right:16px;top:calc(14px + env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;z-index:10}
+  .kar-title{display:flex;align-items:center;gap:9px}
+  .kar-title b{font-family:var(--round);font-weight:700;font-size:22px;color:var(--faded)}
+  .kar-toggle{display:flex;align-items:center;gap:8px;border:1px solid var(--border2);border-radius:999px;padding:5px 7px 5px 12px;cursor:pointer;background:none;transition:border-color .25s}
+  .kar-toggle .ktxt{font-size:11px;font-weight:600;color:var(--muted)}
+  .kar-track{width:40px;height:23px;border-radius:999px;position:relative;flex:none;background:var(--border2);transition:background .25s}
+  .kar-toggle.on .kar-track{background:var(--sun-500)}
+  .kar-knob{position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#fff;transition:left .25s}
+  .kar-toggle.on .kar-knob{left:20px}
+  body.kar-on .wrap{visibility:hidden}
+  body.kar-on .tabs{visibility:visible}
+  .kar-lyrics{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:16px;text-align:center;padding:0 22px;z-index:5}
+  .kline{font-size:17px;font-weight:500;line-height:1.3;color:var(--muted);opacity:.7;transition:all .25s}
+  .kline.on{font-size:26px;font-weight:700;color:var(--sun-300);opacity:1}
+
+  /* leaderboard rows */
+  .lb-rank{display:flex;align-items:center;gap:12px;padding:6px 0}
+  .lb-rank .rk{width:20px;text-align:center;font-family:var(--label);font-weight:700;font-size:12px;color:var(--dim)}
+  .lb-rank .rk.top{color:var(--progress)}
+  .lb-rank .nm{flex:1;font-size:13px;color:var(--ink-hi)}
+  .lb-rank .nm.you{color:var(--progress);font-weight:700}
+  .lb-rank .pt{font-family:var(--label);font-weight:600;font-size:12px;color:var(--muted)}
+  .badge-live{font-family:var(--label);font-weight:700;font-size:8px;letter-spacing:.1em;color:#0c3a22;background:var(--live);border-radius:999px;padding:3px 7px}
   .soon h3{font-family:var(--round);font-weight:600;font-size:22px;color:var(--ink-hi);margin:2px 0 0}
   .soon p{color:var(--muted);font-size:14px;line-height:1.55;max-width:44ch;margin:0}
 
@@ -134,7 +191,7 @@
 
   /* setup */
   .setup-head{border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:18px}
-  .setup-title{font-family:var(--round);font-weight:600;font-size:26px;color:var(--ink-hi)}
+  .setup-title{font-family:var(--round);font-weight:600;font-size:26px;color:var(--faded)}
   .gk-connect{display:flex;align-items:center;gap:14px;width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:14px;padding:14px 16px;cursor:pointer;color:var(--ink);font-family:inherit;font-size:17px;font-weight:600;text-align:left;margin-bottom:12px}
   .gk-connect .lbl{flex:1}
   .gk-connect .chev{color:var(--dim);font-size:20px}
@@ -147,7 +204,22 @@
   .lb-cap{text-align:center}
   .lb-cap .t{font-family:var(--round);font-weight:600;font-size:24px;color:var(--ink-hi)}
   .lb-cap .s{color:var(--muted);font-size:16px;margin-top:2px}
-  .lb-cap .h{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--dim);margin-top:8px}
+  .lb-cap .h{font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.1em;color:var(--dim);margin-top:8px}
+  .lb-transport{display:flex;align-items:center;justify-content:center;gap:24px;margin-top:4px}
+
+  /* share as a bottom sheet over the live now-playing screen */
+  #gk-share.panel-card{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:90;display:none;margin:0;border:none;border-top:1px solid var(--sun-500);border-radius:22px 22px 0 0;background:var(--card);padding:16px 18px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -18px 50px -12px rgba(0,0,0,.7),0 0 30px -8px rgba(var(--glow),.45)}
+  #gk-share.panel-card.open{display:block}
+  #gk-share-scrim{display:none;position:fixed;inset:0;background:rgba(6,3,5,.5);z-index:85}
+  #gk-share-scrim.open{display:block}
+  .sheet-grip{width:38px;height:4px;border-radius:2px;background:var(--border2);margin:0 auto 14px}
+  .share-friend{display:flex;align-items:center;gap:11px;margin-top:14px;background:var(--card2);border:1px solid var(--border2);border-radius:12px;padding:10px 12px}
+  .share-friend .av{width:40px;height:40px;border-radius:50%;flex:none;background:linear-gradient(160deg,var(--gold),#FF7A3C);display:flex;align-items:center;justify-content:center;font-family:var(--round);font-weight:700;color:var(--on-accent);font-size:17px}
+  .share-friend .meta{flex:1;min-width:0}
+  .share-friend .nm{font-size:15px;color:var(--ink-hi);font-weight:600}
+  .share-friend .st{font-size:12px;color:var(--dim)}
+  .share-friend .chk{width:23px;height:23px;border-radius:50%;background:var(--sun-500);display:flex;align-items:center;justify-content:center;flex:none}
+  .btn-send{margin-top:14px;width:100%;padding:13px;border:none;border-radius:12px;cursor:pointer;font-family:var(--sans);font-weight:700;font-size:15px;background:linear-gradient(180deg,var(--sun-300),var(--sun-500));color:var(--on-accent)}
 
   .hidden{display:none!important}
   .apple-notice{display:none}
@@ -210,15 +282,23 @@
     <ul id="gk-suggest" class="suggest hidden" role="listbox" aria-label="Song suggestions"></ul>
   </div>
 
-  <!-- share -->
+  <!-- share — bottom sheet over the live now-playing screen -->
+  <div id="gk-share-scrim"></div>
   <div id="gk-share" class="panel-card">
+    <div class="sheet-grip"></div>
     <div class="mono-kicker">Share</div>
-    <div id="gk-share-title" style="font-family:var(--round);font-weight:600;font-size:21px;color:var(--ink-hi)">Send this song to a friend</div>
-    <div style="color:var(--muted);font-size:14px;margin-top:4px">They open it in geeek, log in, and get all the curated info — story, people, videos and more.</div>
-    <div class="share-row">
-      <input id="gk-link" readonly value="">
-      <button id="gk-copy" class="btn-copy">Copy</button>
+    <div id="gk-share-title" class="sec-title" style="font-size:21px;line-height:1.2">Send to a friend</div>
+    <div style="color:#D8C6B5;font-size:13px;font-weight:600;margin-top:4px">They get the full dive — story, people, videos and more.</div>
+    <div class="share-friend">
+      <div class="av">M</div>
+      <div class="meta">
+        <div class="nm">Maya Chen</div>
+        <div class="st">On geeek · tap to send</div>
+      </div>
+      <span class="chk"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#1A0B05" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4.5 4.5L19 7"/></svg></span>
     </div>
+    <button id="gk-copy" class="btn-send">Send to Maya</button>
+    <input id="gk-link" type="hidden" readonly value="">
   </div>
 
   <!-- main -->
@@ -240,6 +320,9 @@
           <span id="gk-duration" class="time" style="text-align:right">0:00</span>
         </div>
         <div class="transport">
+          <button id="gk-shuffle" class="t-btn-muted" aria-label="Shuffle">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
+          </button>
           <button id="gk-prev" class="t-btn" aria-label="Previous">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="2.6" height="12" rx="1.3"/><path d="M20 6.6v10.8a.6.6 0 0 1-.92.5l-8.2-5.4a.6.6 0 0 1 0-1l8.2-5.4a.6.6 0 0 1 .92.5z"/></svg>
           </button>
@@ -248,6 +331,9 @@
           </button>
           <button id="gk-next" class="t-btn" aria-label="Next">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><rect x="15.4" y="6" width="2.6" height="12" rx="1.3"/><path d="M4 6.6v10.8a.6.6 0 0 0 .92.5l8.2-5.4a.6.6 0 0 0 0-1L4.92 6.1A.6.6 0 0 0 4 6.6z"/></svg>
+          </button>
+          <button id="gk-repeat" class="t-btn-muted" aria-label="Repeat">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           </button>
         </div>
         <div id="gk-pmsg" class="pmsg"></div>
@@ -290,15 +376,15 @@
       <div style="color:var(--muted);font-size:16px;margin-top:3px">Link a service so geeek knows what's playing.</div>
     </div>
     <button class="gk-connect" data-svc="spotify">
-      <span style="width:34px;height:34px;flex:none;display:inline-flex"><svg viewBox="0 0 24 24" width="34" height="34"><circle cx="12" cy="12" r="12" fill="#1DB954"/><g fill="none" stroke="#061b0f" stroke-width="1.9" stroke-linecap="round"><path d="M5.6 9c4.6-1.3 9.6-.9 13.2 1.4"/><path d="M6.5 12.6c3.7-1.1 7.7-.7 10.7 1.2"/><path d="M7.3 15.9c2.7-.8 5.7-.4 8.1 1"/></g></svg></span>
+      <span style="width:32px;height:32px;flex:none;display:inline-flex"><svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#F6ECE0" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8.6c5-1.7 11.2-1.2 15.8 1.7"/><path d="M5.2 12.6c4-1.3 9.2-.85 13 1.5"/><path d="M6.4 16.4c3-1 6.8-.6 9.6 1.1"/></svg></span>
       <span class="lbl">Connect Spotify</span><span class="chev">→</span>
     </button>
     <button class="gk-connect" data-svc="apple">
-      <span style="width:34px;height:34px;flex:none;display:inline-flex"><svg viewBox="0 0 24 24" width="34" height="34"><defs><linearGradient id="am2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FB5C74"/><stop offset="1" stop-color="#FA233B"/></linearGradient></defs><rect x="0" y="0" width="24" height="24" rx="6" fill="url(#am2)"/><path d="M16 5.4l-6.4 1.5v7.7a2.1 2.1 0 1 1-1.25-1.92V8.6L16 7z" fill="#fff"/></svg></span>
-      <span class="lbl">Connect Apple Music</span><span style="font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--sun);border:1px solid var(--border2);border-radius:999px;padding:2px 8px;margin-left:8px;flex:none">beta</span><span class="chev">→</span>
+      <span style="width:32px;height:32px;flex:none;display:inline-flex"><svg viewBox="0 0 24 24" width="30" height="30" fill="#F6ECE0" aria-hidden="true"><path d="M18.7 17c-.3.8-.7 1.5-1.2 2.1-.7.9-1.3 1.4-1.9 1.4-.5 0-.9-.1-1.6-.4-.6-.3-1.1-.4-1.6-.4-.5 0-1 .1-1.7.4-.6.3-1.1.4-1.5.5-.6 0-1.3-.6-2-1.6-1.3-1.7-2-3.9-2-6 0-2 .5-3.4 1.5-4.3.7-.7 1.6-1 2.5-1 .5 0 1 .2 1.7.5.6.2.9.4 1.1.4.2 0 .6-.1 1.3-.4.7-.3 1.3-.4 1.7-.4 1 0 1.9.4 2.6 1.2-1.6 1-2.4 2.7-1.6 4.7.3.9.9 1.5 1.7 1.8zM14.5 4.4c0 .7-.3 1.4-.8 2-.6.7-1.3 1.1-2.1 1 0-.8.3-1.5.8-2.1.5-.6 1.3-1 2.1-1z"/></svg></span>
+      <span class="lbl">Connect Apple Music</span><span style="font-family:var(--label);font-weight:600;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--sun);border:1px solid var(--border2);border-radius:999px;padding:2px 8px;margin-left:8px;flex:none">beta</span><span class="chev">→</span>
     </button>
     <button class="gk-connect" data-svc="shazam">
-      <span style="width:34px;height:34px;flex:none;display:inline-flex"><svg viewBox="0 0 24 24" width="34" height="34"><defs><linearGradient id="shzset" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3D8BFF"/><stop offset="1" stop-color="#1666E6"/></linearGradient></defs><circle cx="12" cy="12" r="12" fill="url(#shzset)"/><path d="M15.8 7c-2.1-1.5-5-1.2-6.5.8-1 1.3-.6 2.9.8 3.7l3 1.8c1.4.8 1.8 2.4.8 3.7-1.5 2-4.4 2.3-6.5.8" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span style="width:32px;height:32px;flex:none;display:inline-flex"><svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#F6ECE0" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9.2"/><path d="M14.2 8.4c-1.6-1-3.7-.7-4.8.8-.7 1-.4 2.2.7 2.9l2.3 1.4c1.1.7 1.4 1.9.7 2.9-1.1 1.5-3.2 1.8-4.8.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       <span class="lbl">Connect Shazam</span><span class="chev">→</span>
     </button>
     <div id="gk-setup-note" style="color:var(--dim);font-size:13px;margin:2px 2px 14px"></div>
@@ -314,10 +400,27 @@
     <div id="gk-lb-sub" class="s">—</div>
     <div class="h">Full resolution · click anywhere to close</div>
   </div>
+  <div class="lb-transport" id="gk-lb-transport">
+    <button id="gk-lb-shuffle" class="t-btn-muted" aria-label="Shuffle">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
+    </button>
+    <button id="gk-lb-prev" class="t-btn" style="color:var(--ink-hi)" aria-label="Previous">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="2.6" height="12" rx="1.3"/><path d="M20 6.6v10.8a.6.6 0 0 1-.92.5l-8.2-5.4a.6.6 0 0 1 0-1l8.2-5.4a.6.6 0 0 1 .92.5z"/></svg>
+    </button>
+    <button id="gk-lb-play" class="play-btn" style="width:54px;height:54px" aria-label="Play or pause">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="#1A0B05" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button id="gk-lb-next" class="t-btn" style="color:var(--ink-hi)" aria-label="Next">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><rect x="15.4" y="6" width="2.6" height="12" rx="1.3"/><path d="M4 6.6v10.8a.6.6 0 0 0 .92.5l8.2-5.4a.6.6 0 0 0 0-1L4.92 6.1A.6.6 0 0 0 4 6.6z"/></svg>
+    </button>
+    <button id="gk-lb-repeat" class="t-btn-muted" aria-label="Repeat">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+    </button>
+  </div>
 </div>
 
 <script src="./config.js"></script>
-<script src="./gate.js?v=0.9.1"></script>
+<script src="./gate.js?v=1.0"></script>
 <script src="./log.js"></script>
 <script src="./i18n.js"></script>
 <script src="./spotify.js"></script>

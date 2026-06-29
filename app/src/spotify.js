@@ -135,11 +135,30 @@
       return res.ok || res.status === 204;
     } catch (e) { return false; }
   }
+  // Local mirrors of shuffle/repeat so the UI can toggle/cycle without a state read.
+  // Spotify repeat cycles: off -> context -> track -> off.
+  var shuffleOn = false;
+  var repeatModes = ["off", "context", "track"];
+  var repeatIdx = 0;
   var playerControl = {
     play: function () { return control("PUT", "/me/player/play"); },
     pause: function () { return control("PUT", "/me/player/pause"); },
     next: function () { return control("POST", "/me/player/next"); },
-    prev: function () { return control("POST", "/me/player/previous"); }
+    prev: function () { return control("POST", "/me/player/previous"); },
+    // Returns { ok, state } so the UI can reflect the new value, or { ok:false } if it failed.
+    toggleShuffle: async function () {
+      var want = !shuffleOn;
+      var ok = await control("PUT", "/me/player/shuffle?state=" + (want ? "true" : "false"));
+      if (ok) shuffleOn = want;
+      return { ok: ok, state: shuffleOn };
+    },
+    cycleRepeat: async function () {
+      var nextIdx = (repeatIdx + 1) % repeatModes.length;
+      var mode = repeatModes[nextIdx];
+      var ok = await control("PUT", "/me/player/repeat?state=" + mode);
+      if (ok) repeatIdx = nextIdx;
+      return { ok: ok, state: repeatModes[repeatIdx] };
+    }
   };
 
   // ---------- player abstraction registry ----------

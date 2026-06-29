@@ -1,4 +1,4 @@
-// geeek — app bootstrap & UI wiring (v0.9.1)
+// geeek — app bootstrap & UI wiring (v1.0)
 (function () {
   "use strict";
   var CFG = window.SDD_CONFIG;
@@ -55,7 +55,6 @@
     if (!t) return;
     var url = location.origin + "/?t=" + encodeURIComponent(t.title || "") + "&a=" + encodeURIComponent(t.artist || "");
     var link = $("gk-link"); if (link) link.value = url;
-    var st = $("gk-share-title"); if (st) st.textContent = "Send “" + (t.title || "this song") + "” to a friend";
   }
 
   // ---------- deep-dive cache ----------
@@ -67,7 +66,10 @@
 
   // ---------- panels ----------
   function welcome() {
-    panel.innerHTML = '<div class="soon"><h3>Geek out about the music you love.</h3><p>Connect Spotify (or search a song) and we’ll surface the story behind it, who made it, and how it connects to everything else — then go live your life.</p></div>';
+    if (hint && curTab === "cards") hint.textContent = "Connect a service or search a song to begin";
+    panel.innerHTML = '<div style="background:linear-gradient(180deg,var(--card),var(--card2));border:1px dashed var(--border2);border-radius:16px;padding:34px 18px;text-align:center">'
+      + '<div style="font-family:var(--round);font-weight:600;font-size:19px;color:var(--ink-hi);margin-bottom:6px">Nothing to dive into yet</div>'
+      + '<div style="color:var(--dim);font-size:13px;line-height:1.5;max-width:32ch;margin:0 auto">Once a song is playing, its story, people, videos and trivia appear here.</div></div>';
   }
   function notePanel(text) { panel.innerHTML = '<div class="soon"><p>' + esc(text) + '</p></div>'; }
   function comingSoonHTML(title, desc) {
@@ -75,27 +77,57 @@
   }
   function comingSoon(title, desc) { panel.innerHTML = comingSoonHTML(title, desc); }
 
-  function ddCard(c) {
-    return '<div class="dd-card"><div class="dd-kicker">' + esc(c.kicker || "") + '</div><div class="dd-title">' + esc(c.title || "") + '</div>'
-      + '<div class="dd-scroll"><p class="dd-body">' + esc(c.body || "") + '</p>'
-      + (c.extra ? '<div class="dd-extra">' + esc(c.extra) + '</div>' : '') + '</div></div>';
+  // ---------- deep dive: fun-fact pager ----------
+  // The real /api/deepdive returns ~5 cards (story / people / connections / fun facts /
+  // did you know). We present them one at a time as "fun facts" with a 5-segment pager;
+  // "Dive deeper" reveals each card's deeper `extra` text (and the remaining cards).
+  var DD = { cards: [], i: 0, deep: false };
+  function factText(c) {
+    // Prefer a short punchy line: the card body, else the title.
+    return (c && (c.body || c.title)) || "";
   }
-  function skeletonCards(n) {
-    var h = '<div class="cards">';
-    for (var i = 0; i < n; i++) h += '<div class="dd-card skeleton"><div class="dd-kicker">loading</div><div class="dd-title">Reading the room…</div><div class="dd-scroll"><p class="dd-body">geeek is digging up the story.</p></div></div>';
-    panel.innerHTML = h + '</div>';
+  function skeletonCards() {
+    panel.innerHTML = '<div class="ff-card skeleton"><div class="ff-kicker">Fun fact</div>'
+      + '<div class="ff-fact">Reading the room…</div>'
+      + '<div class="ff-pager"><span class="lit"></span><span></span><span></span><span></span><span></span></div></div>';
+  }
+  function renderFunFact() {
+    var cards = DD.cards;
+    if (!cards.length) { notePanel("No deep dive for this one yet — try another song."); return; }
+    if (DD.i >= cards.length) DD.i = 0;
+    var c = cards[DD.i];
+    var total = Math.min(5, cards.length);
+    var pager = "";
+    for (var i = 0; i < total; i++) pager += '<span class="' + (i === DD.i % total ? "lit" : "") + '"></span>';
+    var extra = DD.deep ? (c.extra || c.title || "") : "";
+    var deeperLabel = (DD.i < cards.length - 1) ? "Dive deeper" : (DD.deep ? "Dive deeper" : "Dive deeper");
+    panel.innerHTML = '<div class="ff-card" id="ff-card">'
+      + '<div class="ff-kicker">' + esc(c.kicker || "Fun fact") + '</div>'
+      + '<div class="ff-fact">' + esc(factText(c)) + '</div>'
+      + (DD.deep && extra && extra !== factText(c) ? '<div class="ff-extra">' + esc(extra) + '</div>' : '')
+      + '<div class="ff-pager">' + pager + '</div></div>'
+      + '<button class="ff-deeper" id="ff-deeper">' + deeperLabel + '</button>';
+  }
+  function diveDeeper() {
+    // First press reveals the deeper text on the current card; subsequent presses
+    // page forward through the remaining cards.
+    if (!DD.deep) { DD.deep = true; renderFunFact(); return; }
+    DD.i = (DD.i + 1) % DD.cards.length;
+    DD.deep = false;
+    renderFunFact();
   }
   function renderCards(payload) {
     var cards = (payload && payload.cards) || [];
     if (!cards.length) { notePanel("No deep dive for this one yet — try another song."); return; }
-    panel.innerHTML = '<div class="cards">' + cards.map(ddCard).join("") + '</div>';
+    DD = { cards: cards, i: 0, deep: false };
+    renderFunFact();
   }
   async function loadDeepDive(track) {
     if (!track) { welcome(); return; }
     var mine = ++loadSeq;
     var cached = cacheGet(track);
     if (cached && cached.cards && cached.cards.length) { if (curTab === "cards") renderCards(cached); return; }
-    if (curTab === "cards") skeletonCards(4);
+    if (curTab === "cards") skeletonCards();
     var url = CFG.API_BASE + "/deepdive?" + new URLSearchParams({ id: track.id || "", title: track.title || "", artist: track.artist || "" }).toString();
     try {
       var res = await fetch(url);
@@ -120,25 +152,39 @@
       var d = await res.json();
       var items = (d && d.items) || [];
       if (!items.length) { notePanel("No media found for this artist yet."); return; }
+      var discIcon = '<div class="micon"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.2" fill="rgba(255,255,255,.9)" stroke="none"/></svg></div>';
+      var camIcon = '<div class="micon"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2.5"/><circle cx="12" cy="13.3" r="3.2"/><path d="M8 7l1.4-2.4h5.2L16 7"/></svg></div>';
+      var playBadge = '<div class="mplay"><span><svg viewBox="0 0 24 24" width="14" height="14" fill="#fff"><path d="M8 5v14l11-7z"/></svg></span></div>';
       var grid = '<div class="media-grid">';
       items.forEach(function (it) {
-        grid += '<div class="mtile" data-full="' + esc(it.url) + '" data-cap="' + esc(it.title || "") + '" style="background-image:url(\'' + esc(it.thumb || it.url) + '\')"><div class="mcap">' + esc(it.title || "") + '</div></div>';
+        var isVideo = !!(it.kind === "video" || it.video || (it.type && /video/i.test(it.type)) || (it.url && /youtu|\.mp4|vimeo/i.test(it.url)));
+        var hasImg = !!(it.thumb || it.url);
+        var bg = hasImg ? ('background-image:url(\'' + esc(it.thumb || it.url) + '\')') : 'background:linear-gradient(160deg,var(--gold),var(--sun-500))';
+        grid += '<div class="mtile" data-full="' + esc(it.url) + '" data-cap="' + esc(it.title || "") + '" style="' + bg + '">'
+          + (hasImg ? "" : (isVideo ? camIcon : discIcon))
+          + (isVideo ? playBadge : "")
+          + '<div class="mcap">' + esc(it.title || "") + '</div></div>';
       });
-      grid += '</div><div style="font-family:var(--mono);color:var(--dim);font-size:11px;letter-spacing:.06em;margin-top:14px">' + items.length + ' ITEMS · TAP TO VIEW FULL SCREEN</div>'
-        + '<div style="font-family:var(--mono);color:var(--faint);font-size:10px;letter-spacing:.06em;margin-top:6px">VIDEOS COMING WITH THE NEXT PHASE</div>';
+      grid += '</div><div class="media-foot">' + items.length + ' ITEMS · HI-RES</div>';
       panel.innerHTML = grid;
     } catch (e) { notePanel("Couldn’t load media right now."); }
   }
 
   // ---------- trivia ----------
   var trivia, TQ = { list: [], i: 0, score: 0, answered: false };
-  function resetTrivia() { trivia = { mode: null, subject: "song", game: null, questions: 10, difficulty: "Medium", cats: { song: true, artist: true, era: true, lyrics: false, charts: false } }; }
+  function resetTrivia() { trivia = { mode: null, subject: "song", game: null, questions: 10, difficulty: "Easy", cats: { song: false, artist: true, era: false, lyrics: false, charts: false } }; }
   function subjLabel() { return trivia.subject === "artist" ? (cur && cur.artist) || "this artist" : (cur && cur.title) || "this song"; }
   function tvBack(to) { return '<button class="tv-back" data-to="' + to + '" style="background:none;border:none;color:#8A7668;cursor:pointer;font-family:inherit;font-size:14px;display:inline-flex;align-items:center;gap:6px;padding:0;margin-bottom:14px"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>Back</button>'; }
-  function tvTitle(t) { return '<div style="font-family:var(--round);font-weight:600;font-size:22px;color:var(--ink-hi);margin-bottom:14px">' + t + '</div>'; }
-  function tvKicker(t) { return '<div style="font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--sun);margin-bottom:8px">' + t + '</div>'; }
-  function modeCard(mode, icon, title, sub) {
-    return '<button class="tvc tv-mode" data-mode="' + mode + '" style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:8px;background:var(--card2);border:1px solid var(--border2);border-radius:14px;padding:16px;cursor:pointer;text-align:left;color:var(--ink);font-family:inherit"><span style="color:var(--sun)">' + icon + '</span><span style="font-family:var(--round);font-weight:600;font-size:18px;color:var(--ink-hi)">' + title + '</span><span style="color:var(--muted);font-size:13px;line-height:1.4">' + sub + '</span></button>';
+  function tvTitle(t) { return '<div style="font-family:var(--round);font-weight:600;font-size:20px;color:var(--faded);margin-bottom:14px">' + t + '</div>'; }
+  function tvKicker(t) { return '<div style="font-family:var(--label);font-weight:600;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--sun);margin-bottom:8px">' + t + '</div>'; }
+  // full-width mode row (icon · title · sub · arrow); optional LIVE badge
+  function modeRow(mode, icon, title, sub, live) {
+    return '<button class="tvc tv-mode" data-mode="' + mode + '" style="display:flex;align-items:center;gap:12px;width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:14px;padding:13px 14px;cursor:pointer;text-align:left;color:var(--ink);font-family:inherit">'
+      + '<span style="color:var(--sun);flex:none">' + icon + '</span>'
+      + '<div style="flex:1"><div style="font-family:var(--round);font-weight:600;font-size:16px;color:var(--ink-hi)">' + title
+      + (live ? ' <span style="font-family:var(--label);font-weight:700;font-size:8px;letter-spacing:.1em;color:#1A0B05;background:var(--sun-300);border-radius:999px;padding:2px 6px;vertical-align:middle">LIVE</span>' : '')
+      + '</div><div style="color:var(--muted);font-size:12px;margin-top:1px">' + sub + '</div></div>'
+      + '<span style="color:var(--dim);font-size:18px">→</span></button>';
   }
   function tvRow(cls, data, title, sub) {
     return '<button class="tvopt ' + cls + '" ' + data + ' style="display:flex;align-items:center;gap:12px;width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:12px;padding:13px 14px;cursor:pointer;text-align:left;color:var(--ink);font-family:inherit;margin-bottom:10px"><div style="flex:1"><div style="font-weight:700;font-size:15px;color:var(--ink-hi)">' + title + '</div><div style="color:var(--muted);font-size:13px">' + sub + '</div></div><span style="color:var(--dim);font-size:18px">→</span></button>';
@@ -154,36 +200,97 @@
     if (!cur) { notePanel("Play or search a song first, then quiz yourself on it."); return; }
     var h = "";
     if (step === "mode") {
-      h = tvKicker("Music trivia") + tvTitle("How do you want to play?")
-        + '<div style="display:flex;gap:10px">' + modeCard("solo", personSvg, "Play solo", "Beat your own high score against the clock.") + modeCard("friends", peopleSvg, "Play with friends", "Share a room code; everyone answers live.") + '</div>'
-        + '<button class="tv-mode" data-mode="contest" style="display:flex;align-items:center;gap:14px;width:100%;margin-top:10px;background:var(--card2);border:2px solid var(--sun-500);border-radius:14px;padding:15px 16px;cursor:pointer;text-align:left;color:var(--ink);font-family:inherit"><span style="color:var(--sun)">' + globeSvg + '</span><div style="flex:1"><div style="font-family:var(--round);font-weight:600;font-size:18px;color:var(--ink-hi)">Worldwide contest</div><div style="color:var(--muted);font-size:13px;margin-top:2px">Compete with an artist’s biggest superfans for the global #1 spot.</div></div><span style="color:var(--dim);font-size:20px">→</span></button>';
+      // three options as full-width rows; "Global contests" carries a LIVE badge (no orange frame)
+      h = tvTitle("How do you want to play?")
+        + '<div style="display:flex;flex-direction:column;gap:10px">'
+        + modeRow("solo", personSvg, "Play solo", "Beat the clock on your own.")
+        + modeRow("friends", peopleSvg, "Play with friends", "Share a room code — answer live.")
+        + modeRow("contest", globeSvg, "Global contests", "Take on an artist’s superfans.", true)
+        + '</div>';
     } else if (step === "subject") {
-      h = tvBack("mode") + tvTitle("What should the questions be about?")
-        + tvRow("tv-subject", 'data-subj="song"', "This song", esc((cur.title || "") + " · " + (cur.artist || "")))
-        + tvRow("tv-subject", 'data-subj="artist"', "This artist", esc(cur.artist || ""))
-        + '<div style="font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:4px">Playlists arrive with the music-graph engine</div>';
+      h = tvBack("mode") + tvTitle("Pick a song or playlist")
+        + tvRow("tv-subject", 'data-subj="song"', "Now playing", esc((cur.title || "") + " · " + (cur.artist || "")))
+        + tvRow("tv-subject", 'data-subj="artist"', "This artist", esc((cur.artist || "this artist") + " — every era"))
+        + '<div style="font-family:var(--label);font-weight:600;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:4px 0 10px">Or pick a playlist <span class="preview-chip">preview</span></div>'
+        + tvRow("tv-pl", '', "70s Rock Classics", "48 songs")
+        + tvRow("tv-pl", '', "Road Trip", "32 songs");
     } else if (step === "game") {
-      h = tvBack("subject") + tvKicker("Solo · " + subjLabel()) + tvTitle("What kind of game?")
-        + tvWide('data-game="best"', "Best score", "Answer a set of questions about " + esc(subjLabel()) + ". Race the clock for a high score.")
-        + tvWide('data-game="advanced"', "Advanced", "Fine-tune length, difficulty and categories.");
+      // two box-border full-width buttons: Best score (filled), Advanced (outlined)
+      h = tvBack("subject") + tvTitle("What kind of game?")
+        + '<div style="display:flex;flex-direction:column;gap:12px">'
+        + '<button class="tv-game" data-game="best" style="box-sizing:border-box;width:100%;padding:15px;border:none;border-radius:12px;text-align:center;background:linear-gradient(180deg,var(--sun-300),var(--sun-500));color:var(--on-accent);font-family:var(--sans);font-weight:700;font-size:17px;cursor:pointer">Best score</button>'
+        + '<button class="tv-game" data-game="advanced" style="box-sizing:border-box;width:100%;padding:15px;border:1px solid var(--border2);border-radius:12px;text-align:center;background:none;color:var(--ink-hi);font-family:var(--sans);font-weight:700;font-size:17px;cursor:pointer">Advanced</button>'
+        + '</div>';
     } else if (step === "advanced") {
       h = tvBack("game") + tvTitle("Advanced setup") + advControls() + '<button class="tv-start btn-primary">Start game</button>';
     } else if (step === "ready") {
       h = tvBack("game") + tvTitle("Ready?")
-        + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px">' + ["Solo", subjLabel(), trivia.questions + " questions", trivia.difficulty].map(function (c) { return '<span style="background:var(--card2);border:1px solid var(--border2);border-radius:999px;padding:7px 13px;font-size:12px;color:var(--ink);font-family:var(--mono)">' + esc(c) + '</span>'; }).join("") + '</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px">' + ["Solo", subjLabel(), trivia.questions + " questions · " + trivia.difficulty].map(function (c) { return '<span style="background:var(--card2);border:1px solid var(--border2);border-radius:999px;padding:7px 12px;font-size:11px;color:var(--ink);font-family:var(--label);font-weight:600">' + esc(c) + '</span>'; }).join("") + '</div>'
         + '<button class="tv-start btn-primary">Start game</button>';
     }
     panel.innerHTML = h;
     if (step === "advanced") { var r = $("tv-q-range"); if (r) r.addEventListener("input", function () { trivia.questions = +this.value; $("tv-q-out").textContent = this.value; }); }
   }
   function advControls() {
-    var s = '<div style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:14px;color:var(--muted)">Number of questions</span><span id="tv-q-out" style="font-family:var(--mono);color:var(--sun-300);font-weight:700">' + trivia.questions + '</span></div><input id="tv-q-range" type="range" min="5" max="15" step="1" value="' + trivia.questions + '" style="width:100%;accent-color:#FF8A4D"></div>';
+    var s = '<div style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:14px;color:var(--muted)">Number of questions</span><span id="tv-q-out" style="font-family:var(--label);color:var(--sun-300);font-weight:700">' + trivia.questions + '</span></div><input id="tv-q-range" type="range" min="5" max="15" step="1" value="' + trivia.questions + '" style="width:100%;accent-color:#FF8A4D"></div>';
     s += '<div style="margin-bottom:16px"><div style="font-size:14px;color:var(--muted);margin-bottom:8px">Difficulty</div><div style="display:flex;gap:8px">';
     ["Easy", "Medium", "Hard"].forEach(function (d) { var on = trivia.difficulty === d; s += '<button class="tv-diff" data-diff="' + d + '" style="flex:1;padding:10px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600;font-size:14px;border:1px solid ' + (on ? "transparent" : "var(--border2)") + ';background:' + (on ? "linear-gradient(180deg,#FFB14D,#FF8A4D)" : "var(--card)") + ';color:' + (on ? "var(--on-accent)" : "var(--ink)") + '">' + d + '</button>'; });
     s += '</div></div><div style="margin-bottom:18px"><div style="font-size:14px;color:var(--muted);margin-bottom:8px">Categories</div><div style="display:flex;flex-wrap:wrap;gap:8px">';
     [["song", "The song"], ["artist", "The artist"], ["era", "The era"], ["lyrics", "Lyrics"], ["charts", "Chart history"]].forEach(function (c) { var on = trivia.cats[c[0]]; s += '<button class="tv-cat" data-cat="' + c[0] + '" style="padding:8px 13px;border-radius:999px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;border:1px solid ' + (on ? "transparent" : "var(--border2)") + ';background:' + (on ? "linear-gradient(180deg,#FFB14D,#FF8A4D)" : "var(--card)") + ';color:' + (on ? "var(--on-accent)" : "var(--muted)") + '">' + c[1] + '</button>'; });
     return s + '</div></div>';
   }
+  // ---- trivia preview screens (contests / friends / leaderboard / live question) ----
+  function previewChip() { return '<span class="preview-chip">preview</span>'; }
+  function contestRow(artist, sub) {
+    return '<button class="tv-contest" data-artist="' + esc(artist) + '" style="display:flex;align-items:center;gap:12px;width:100%;background:var(--card2);border:1px solid var(--border2);border-radius:12px;padding:12px 13px;margin-bottom:9px;cursor:pointer;text-align:left;color:var(--ink);font-family:inherit">'
+      + '<span style="width:36px;height:36px;border-radius:9px;flex:none;background:linear-gradient(160deg,var(--gold),#FF7A3C)"></span>'
+      + '<div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--ink-hi)">' + esc(artist) + '</div><div style="color:var(--muted);font-size:12px">' + esc(sub) + '</div></div>'
+      + '<span style="font-family:var(--label);font-weight:700;font-size:8px;letter-spacing:.1em;color:#0c3a22;background:var(--live);border-radius:999px;padding:3px 7px">LIVE</span></button>';
+  }
+  function renderContestPick() {
+    panel.innerHTML = tvBack("mode") + tvKicker("Worldwide contest " + previewChip())
+      + contestRow("The Beatles", "12,480 fans competing")
+      + contestRow("Rush", "3,210 fans competing")
+      + contestRow("Pink Floyd", "7,940 fans competing")
+      + contestRow("Grateful Dead", "5,070 fans competing")
+      + '<div style="font-family:var(--label);font-weight:600;font-size:9px;letter-spacing:.1em;color:var(--faint);margin-top:4px">NEW ARTIST CONTESTS OPEN EVERY WEEK</div>';
+  }
+  function renderFriends() {
+    panel.innerHTML = tvBack("mode") + tvTitle("Play with friends " + previewChip())
+      + '<div class="soon" style="padding:18px 6px"><p>Live multiplayer rooms — share a code, everyone answers the same questions in real time. Coming in a later phase.</p></div>';
+  }
+  function lbRow(rank, name, pts, top) {
+    var you = name === "You";
+    return '<div class="lb-rank"><span class="rk' + (top ? " top" : "") + '">' + rank + '</span><span class="nm' + (you ? " you" : "") + '">' + esc(name) + '</span><span class="pt">' + esc(pts) + '</span></div>';
+  }
+  function renderLeaderboard(artist) {
+    panel.innerHTML = tvBack("mode") + tvKicker("Worldwide contest · this week " + previewChip())
+      + '<div style="font-family:var(--round);font-weight:600;font-size:22px;color:var(--ink-hi)">' + esc(artist) + ' superfans</div>'
+      + '<div style="color:var(--muted);font-size:13px;margin:3px 0 14px">12,480 fans competing · 50 hard questions · resets weekly</div>'
+      + '<div style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:13px 15px;margin-bottom:14px">'
+      + '<div style="font-family:var(--label);font-weight:600;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:9px">Global leaderboard</div>'
+      + lbRow("1", "vinyl_vagabond", "9,840", true)
+      + lbRow("2", "strawberry_fields", "9,610", false)
+      + lbRow("3", "tom_sawyer_2112", "9,420", false)
+      + '<div style="border-top:1px dashed var(--border2);margin:8px 0"></div>'
+      + lbRow("—", "You", "not entered", false)
+      + '</div><button class="tv-enter btn-primary">Enter contest</button>';
+  }
+  function renderLiveQuestion() {
+    // resting state of a live question — an answered round (one wrong red, correct green)
+    function opt(t, state) {
+      var bc = state === "ok" ? "#54C98A" : state === "no" ? "#FF5A4A" : "var(--border2)";
+      var bg = state === "ok" ? "rgba(84,201,138,.18)" : state === "no" ? "rgba(255,90,74,.16)" : "var(--card)";
+      var col = state === "ok" ? "#EAF7EF" : "var(--ink)";
+      return '<div style="padding:12px 13px;border:1px solid ' + bc + ';border-radius:10px;background:' + bg + ';color:' + col + ';font-size:14px;text-align:left">' + esc(t) + '</div>';
+    }
+    panel.innerHTML = tvBack("mode")
+      + '<div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--label);font-weight:600;color:var(--dim);font-size:10px;letter-spacing:.08em;margin-bottom:12px"><span>QUESTION 1 / 10 · MEDIUM ' + previewChip() + '</span><span style="color:var(--sun-300)">SCORE 0</span></div>'
+      + '<div style="font-weight:700;font-size:17px;color:var(--ink-hi);margin-bottom:14px;line-height:1.3">Which 1975 album features “Bohemian Rhapsody”?</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">' + opt("A Night at the Opera", "ok") + opt("Sheer Heart Attack", "no") + opt("A Day at the Races", "") + opt("News of the World", "") + '</div>'
+      + '<div style="text-align:center;margin-top:14px;font-family:var(--label);font-weight:600;color:var(--live);font-size:11px;letter-spacing:.1em">CORRECT · +100</div>';
+  }
+
   function startTriviaGame() {
     panel.innerHTML = '<div class="soon"><h3>Writing your questions…</h3><p>geeek is building a set about ' + esc(subjLabel()) + '.</p></div>';
     var cats = Object.keys(trivia.cats).filter(function (k) { return trivia.cats[k]; }).join(",");
@@ -198,7 +305,7 @@
     var q = TQ.list[TQ.i];
     TQ.answered = false;
     var opts = q.options.map(function (t, i) { return '<button class="tq-opt" data-i="' + i + '" style="padding:12px 14px;border:1px solid var(--border2);border-radius:10px;background:var(--card);color:var(--ink);cursor:pointer;font-family:inherit;font-size:15px;text-align:left">' + esc(t) + '</button>'; }).join("");
-    panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);color:var(--dim);font-size:11px;letter-spacing:.08em;margin-bottom:12px"><span>QUESTION ' + (TQ.i + 1) + ' / ' + TQ.list.length + ' · ' + trivia.difficulty.toUpperCase() + '</span><span style="color:var(--sun-300)">SCORE ' + TQ.score + '</span></div>'
+    panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--label);font-weight:600;color:var(--dim);font-size:11px;letter-spacing:.08em;margin-bottom:12px"><span>QUESTION ' + (TQ.i + 1) + ' / ' + TQ.list.length + ' · ' + trivia.difficulty.toUpperCase() + '</span><span style="color:var(--sun-300)">SCORE ' + TQ.score + '</span></div>'
       + '<div style="font-weight:700;font-size:18px;color:var(--ink-hi);margin-bottom:14px">' + esc(q.q) + '</div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + opts + '</div>'
       + '<div id="tq-foot" style="margin-top:14px;min-height:24px"></div>';
@@ -221,21 +328,93 @@
   }
 
   // ---------- tabs ----------
-  var HINTS = { cards: "The deep-dive on what’s playing", songs: "Songs that share its DNA", artists: "Artists similar to the one playing", trivia: "Test your music knowledge", media: "Photos and album art", shazam: "Listen to discover", karaoke: "Sing along" };
+  var HINTS = { cards: "The story behind what’s playing", songs: "Songs that share its DNA", artists: "Artists similar to the one playing", trivia: "", media: "Media", shazam: "Listen to discover what’s playing around you", karaoke: "" };
   function setActiveTab(name) {
     curTab = name;
     Array.prototype.forEach.call(tabsEl.querySelectorAll(".gk-tab"), function (b) { b.classList.toggle("active", b.getAttribute("data-tab") === name); });
+    // karaoke is a full-screen lyrics experience — no hero on this screen
+    if (name === "karaoke") { renderKaraoke(); return; }
+    closeKaraoke();
     hint.textContent = HINTS[name] || "";
     renderTab(name);
   }
+
+  // ---- demo list rows (songs / artists) ----
+  function demoRow(grad, title, sub, action) {
+    return '<div class="lrow"><div class="av" style="background:' + grad + '"></div>'
+      + '<div style="flex:1;min-width:0"><div class="lt">' + esc(title) + '</div><div class="ls">' + esc(sub) + '</div></div>'
+      + '<div class="la">' + action + '</div></div>';
+  }
+  function renderSongs() {
+    panel.innerHTML = '<div style="text-align:right;margin:-6px 0 4px"><span class="preview-chip">preview</span></div>'
+      + demoRow("linear-gradient(180deg,#FFC64B,#FF8A4D)", "Somebody to Love", "Queen · 1976", "Explore →")
+      + demoRow("linear-gradient(180deg,#FF9F4D,#FF5A3C)", "November Rain", "Guns N’ Roses · 1991", "Explore →")
+      + demoRow("linear-gradient(180deg,#FFB14D,#FF7A4D)", "Life on Mars?", "David Bowie · 1971", "Explore →");
+  }
+  function renderArtists() {
+    panel.innerHTML = '<div style="text-align:right;margin:-6px 0 4px"><span class="preview-chip">preview</span></div>'
+      + demoRow("linear-gradient(180deg,#FFC64B,#FF9F4D)", "David Bowie", "Glam · art rock", "Explore →")
+      + demoRow("linear-gradient(180deg,#FF9F4D,#FF7A4D)", "Electric Light Orchestra", "Symphonic rock", "Explore →")
+      + demoRow("linear-gradient(180deg,#FF6A6A,#FF3C5A)", "Elton John", "Piano rock", "Explore →");
+  }
+
+  // ---- shazam (demo) ----
+  function renderShazam() {
+    panel.innerHTML = '<div style="text-align:right;margin:-6px 0 2px"><span class="preview-chip">preview</span></div>'
+      + '<div class="shz-wrap">'
+      + '<button class="shz-btn" id="gk-shz-btn" aria-label="Tap to Shazam"><svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="#9C8979" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14.2 8.4c-1.6-1-3.7-.7-4.8.8-.7 1-.4 2.2.7 2.9l2.3 1.4c1.1.7 1.4 1.9.7 2.9-1.1 1.5-3.2 1.8-4.8.8"/></svg></button>'
+      + '<div class="shz-label" id="gk-shz-label">Tap to Shazam</div>'
+      + '<div class="shz-sub">geeek listens for a few seconds, identifies the song playing around you, and dives straight in.</div>'
+      + '<div id="gk-shz-result" style="width:100%;margin-top:4px"></div></div>';
+  }
+  function shazamDemo() {
+    var label = $("gk-shz-label"); var result = $("gk-shz-result");
+    if (!label) return;
+    label.textContent = "Listening…";
+    if (result) result.innerHTML = "";
+    setTimeout(function () {
+      if (curTab !== "shazam") return;
+      label.textContent = "Found it";
+      if (result) result.innerHTML = demoRow("linear-gradient(160deg,#FFC64B,#FF8A4D)", "Don’t Stop Me Now", "Queen · 1978", "Dive in →");
+    }, 1600);
+  }
+
+  // ---- karaoke (full-screen lyrics, demo) ----
+  var KAR = { stage: null, i: 3, vocal: false };
+  var KAR_LINES = ["the opening line sets the scene", "and the next line follows in time", "watch each word turn warm and bright", "now the chorus opens wide", "sing it loud, you know this part", "the bridge brings it all back home", "one more verse before the end"];
+  function closeKaraoke() { if (KAR.stage && KAR.stage.parentNode) { KAR.stage.parentNode.removeChild(KAR.stage); KAR.stage = null; } document.body.classList.remove("kar-on"); }
+  function renderKaraoke() {
+    closeKaraoke();
+    document.body.classList.add("kar-on");
+    var micSvg = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11.5" rx="3" fill="currentColor" stroke="none"/><path d="M6 11a6 6 0 0 0 12 0"/><line x1="12" y1="17.5" x2="12" y2="21"/><line x1="8.5" y1="21" x2="15.5" y2="21"/></svg>';
+    var stage = document.createElement("div");
+    stage.className = "kar-stage";
+    stage.innerHTML = '<div class="kar-top"><div class="kar-title"><span style="color:var(--sun)">' + micSvg + '</span><b>Karaoke</b><span class="preview-chip" style="margin-left:6px">preview</span></div>'
+      + '<button class="kar-toggle" id="kar-toggle"><span class="ktxt">Go vocal-less</span><span class="kar-track"><span class="kar-knob"></span></span></button></div>'
+      + '<div class="kar-lyrics" id="kar-lyrics"></div>';
+    document.body.appendChild(stage);
+    KAR.stage = stage;
+    paintLyrics();
+    $("kar-toggle").addEventListener("click", function () {
+      KAR.vocal = !KAR.vocal;
+      this.classList.toggle("on", KAR.vocal);
+      this.querySelector(".ktxt").textContent = KAR.vocal ? "Vocals off" : "Go vocal-less";
+      KAR.i = (KAR.i + 1) % KAR_LINES.length;
+      paintLyrics();
+    });
+  }
+  function paintLyrics() {
+    var box = $("kar-lyrics"); if (!box) return;
+    box.innerHTML = KAR_LINES.map(function (t, i) { return '<div class="kline' + (i === KAR.i ? " on" : "") + '">' + esc(t) + '</div>'; }).join("");
+  }
+
   function renderTab(name) {
     if (name === "cards") { cur ? loadDeepDive(cur) : welcome(); }
-    else if (name === "songs") { comingSoon("Songs with same DNA", "Recommendations matched to this song’s sonic fingerprint arrive with the music-graph engine."); }
-    else if (name === "artists") { comingSoon("Similar artists", "Artist-to-artist recommendations land with the taste engine (Phase 5)."); }
+    else if (name === "songs") { renderSongs(); }
+    else if (name === "artists") { renderArtists(); }
     else if (name === "trivia") { resetTrivia(); renderTrivia("mode"); }
     else if (name === "media") { cur ? loadMedia(cur) : notePanel("Play or search a song first to see the artist’s media."); }
-    else if (name === "shazam") { comingSoon("Listen to discover", "Point your phone at any song playing nearby and geeek identifies it instantly. Shazam recognition is native-only — it ships with the iOS app."); }
-    else if (name === "karaoke") { comingSoon("Karaoke", "Drop the lead vocals with AI and sing to time-synced lyrics. Coming once stem-separation and licensed lyrics are wired in."); }
+    else if (name === "shazam") { renderShazam(); }
   }
 
   // ---------- polling ----------
@@ -302,8 +481,8 @@
   function hl() { var lis = sList.querySelectorAll("li"); for (var i = 0; i < lis.length; i++) lis[i].classList.toggle("active", i === activeIdx); }
 
   // ---------- panels: search / share / setup ----------
-  function closePanels() { $("gk-search").classList.remove("open"); $("gk-share").classList.remove("open"); }
-  function togglePanel(id) { var open = $(id).classList.contains("open"); closePanels(); if (!open) { $(id).classList.add("open"); if (id === "gk-search") setTimeout(function () { sIn && sIn.focus(); }, 30); } }
+  function closePanels() { $("gk-search").classList.remove("open"); $("gk-share").classList.remove("open"); var sc = $("gk-share-scrim"); if (sc) sc.classList.remove("open"); }
+  function togglePanel(id) { var open = $(id).classList.contains("open"); closePanels(); if (!open) { $(id).classList.add("open"); if (id === "gk-share") { var sc = $("gk-share-scrim"); if (sc) sc.classList.add("open"); } if (id === "gk-search") setTimeout(function () { sIn && sIn.focus(); }, 30); } }
   function showSetup(on) { $("gk-main").classList.toggle("hidden", on); $("gk-setup").classList.toggle("hidden", !on); if (on) closePanels(); }
 
   function refreshSetup() {
@@ -335,9 +514,20 @@
       if (action === "toggle") { ok = await (playing ? CTRL.pause() : CTRL.play()); if (ok) { playing = !playing; setPlayIcon(playing); pstate.playing = playing; pstate.at = Date.now(); } }
       else if (action === "next") { ok = await CTRL.next(); }
       else if (action === "prev") { ok = await CTRL.prev(); }
+      else if (action === "shuffle") {
+        var rs = CTRL.toggleShuffle ? await CTRL.toggleShuffle() : { ok: false };
+        ok = rs.ok;
+        if (ok) { var on = !!rs.state; $("gk-shuffle") && $("gk-shuffle").classList.toggle("on", on); var ls = $("gk-lb-shuffle"); ls && ls.classList.toggle("on", on); }
+      }
+      else if (action === "repeat") {
+        var rr = CTRL.cycleRepeat ? await CTRL.cycleRepeat() : { ok: false };
+        ok = rr.ok;
+        if (ok) { var ron = rr.state && rr.state !== "off"; $("gk-repeat") && $("gk-repeat").classList.toggle("on", ron); var lr = $("gk-lb-repeat"); lr && lr.classList.toggle("on", ron); }
+      }
     } catch (e) { ok = false; }
-    if (!ok) flashPmsg("Reconnect Spotify in ⚙ Setup to control playback (requires Spotify Premium).");
-    setTimeout(poll, 900);
+    // shuffle/repeat fail quietly (e.g. no active device); transport buttons surface the hint
+    if (!ok && (action === "toggle" || action === "next" || action === "prev")) flashPmsg("Reconnect Spotify in ⚙ Setup to control playback (requires Spotify Premium).");
+    if (action === "toggle" || action === "next" || action === "prev") setTimeout(poll, 900);
   }
 
   // ---------- init ----------
@@ -351,7 +541,9 @@
     // panel delegation (trivia + media tiles)
     panel.addEventListener("click", function (e) {
       var bk = e.target.closest(".tv-back"); if (bk) { renderTrivia(bk.getAttribute("data-to")); return; }
-      var md = e.target.closest(".tv-mode"); if (md) { trivia.mode = md.getAttribute("data-mode"); if (trivia.mode === "solo") renderTrivia("subject"); else if (trivia.mode === "contest") comingSoon("Worldwide contest", "Global, ranked superfan contests (Beatles, Rush, and more) need accounts and a live leaderboard — they’re coming in a later phase."); else comingSoon("Play with friends", "Live multiplayer rooms with shared questions are coming in a later phase."); return; }
+      var md = e.target.closest(".tv-mode"); if (md) { trivia.mode = md.getAttribute("data-mode"); if (trivia.mode === "solo") renderTrivia("subject"); else if (trivia.mode === "contest") renderContestPick(); else renderFriends(); return; }
+      var cr = e.target.closest(".tv-contest"); if (cr) { renderLeaderboard(cr.getAttribute("data-artist") || "The Beatles"); return; }
+      var en = e.target.closest(".tv-enter"); if (en) { renderLiveQuestion(); return; }
       var sj = e.target.closest(".tv-subject"); if (sj) { trivia.subject = sj.getAttribute("data-subj"); renderTrivia("game"); return; }
       var gm = e.target.closest(".tv-game"); if (gm) { trivia.game = gm.getAttribute("data-game"); renderTrivia(trivia.game === "advanced" ? "advanced" : "ready"); return; }
       var df = e.target.closest(".tv-diff"); if (df) { trivia.difficulty = df.getAttribute("data-diff"); renderTrivia("advanced"); return; }
@@ -361,6 +553,8 @@
       var nx = e.target.closest(".tq-next"); if (nx) { if (TQ.i >= TQ.list.length - 1) triviaResults(); else { TQ.i++; renderQuestion(); } return; }
       var ag = e.target.closest(".tv-again"); if (ag) { resetTrivia(); renderTrivia("mode"); return; }
       var mt = e.target.closest(".mtile"); if (mt) { openLightbox(mt.getAttribute("data-full"), mt.getAttribute("data-cap"), cur && cur.artist); return; }
+      var dd = e.target.closest("#ff-deeper"); if (dd) { diveDeeper(); return; }
+      var sz = e.target.closest("#gk-shz-btn"); if (sz) { shazamDemo(); return; }
     });
 
     // header buttons
@@ -375,22 +569,30 @@
     sIn.addEventListener("keydown", onSearchKey);
     document.addEventListener("click", function (e) { if (sList && !sList.contains(e.target) && e.target !== sIn && !$("gk-search").contains(e.target) && e.target.closest("#gk-search-btn") === null) hideSuggest(); });
 
-    // share copy
+    // share: "Send to Maya" copies the real share link (keeps the copy logic accessible)
     $("gk-copy").addEventListener("click", function () {
       var b = this; try { navigator.clipboard && navigator.clipboard.writeText($("gk-link").value); } catch (e) {}
-      b.textContent = "Copied ✓"; b.style.background = "linear-gradient(180deg,#FFB14D,#FF8A4D)"; b.style.color = "#1A0B05"; b.style.borderColor = "transparent";
-      setTimeout(function () { b.textContent = "Copy"; b.style.background = "var(--card)"; b.style.color = "var(--ink)"; b.style.borderColor = "var(--border2)"; }, 1600);
+      b.textContent = "Link copied ✓";
+      setTimeout(function () { b.textContent = "Send to Maya"; }, 1600);
     });
+    // dim scrim closes the share sheet
+    $("gk-share-scrim") && $("gk-share-scrim").addEventListener("click", closePanels);
 
     // transport
     $("gk-playbtn").addEventListener("click", function () { transport("toggle"); });
     $("gk-prev").addEventListener("click", function () { transport("prev"); });
     $("gk-next").addEventListener("click", function () { transport("next"); });
+    $("gk-shuffle") && $("gk-shuffle").addEventListener("click", function () { transport("shuffle"); });
+    $("gk-repeat") && $("gk-repeat").addEventListener("click", function () { transport("repeat"); });
 
     // cover + lightbox
     $("gk-cover").addEventListener("click", function () { openLightbox(cur && cur.art, cur && cur.title, cur && cur.artist); });
     $("gk-lightbox").addEventListener("click", function () { $("gk-lightbox").classList.remove("open"); });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") $("gk-lightbox").classList.remove("open"); });
+    // lightbox playback controls (stop propagation so they don't close the lightbox)
+    [["gk-lb-play", "toggle"], ["gk-lb-prev", "prev"], ["gk-lb-next", "next"], ["gk-lb-shuffle", "shuffle"], ["gk-lb-repeat", "repeat"]].forEach(function (p) {
+      var el = $(p[0]); if (el) el.addEventListener("click", function (e) { e.stopPropagation(); transport(p[1]); });
+    });
 
     // shared ui hooks for Apple Music provider
     window.SDD.ui = {
