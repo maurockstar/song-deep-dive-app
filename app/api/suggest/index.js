@@ -17,7 +17,9 @@ async function jget(url, ms) {
   } catch (e) { return null; } finally { clearTimeout(timer); }
 }
 
+const A = require("../shared/auth");
 module.exports = async function (context, req) {
+  if (A.blockIfUnauthed(context, req)) return;
   const term = ((req.query && req.query.term) || "").trim();
   if (term.length < 2) {
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { suggestions: [] } };

@@ -64,7 +64,9 @@ async function artistPhoto(artist) {
   return null;
 }
 
+const A = require("../shared/auth");
 module.exports = async function (context, req) {
+  if (A.blockIfUnauthed(context, req)) return;
   const artist = ((req.query && req.query.artist) || "").trim();
   const title = ((req.query && req.query.title) || "").trim();
   if (!artist && !title) { context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Provide ?artist= and/or ?title=" } }; return; }

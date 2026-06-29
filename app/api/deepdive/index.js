@@ -14,6 +14,7 @@
 // To enable the AI step, add an Application Setting in Azure (Configuration):
 //   ANTHROPIC_API_KEY = sk-ant-...
 
+const A = require("../shared/auth");
 const MB_BASE = "https://musicbrainz.org/ws/2";
 const MB_UA = "geeek/0.8 (https://geeek.fm)"; // MusicBrainz requires a UA
 const WIKI = "https://en.wikipedia.org/api/rest_v1/page/summary/";
@@ -231,6 +232,7 @@ async function getFacts(key, q, context) {
 }
 
 module.exports = async function (context, req) {
+  if (A.blockIfUnauthed(context, req)) return;
   const q = {
     id: (req.query && req.query.id) || "",
     title: ((req.query && req.query.title) || "").trim(),

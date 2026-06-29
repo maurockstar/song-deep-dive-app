@@ -65,7 +65,9 @@ function mintToken(privateKeyPem, keyId, teamId, ttlSeconds) {
   return { token: data + "." + b64url(sig), exp: exp };
 }
 
+const A = require("../shared/auth");
 module.exports = async function (context, req) {
+  if (A.blockIfUnauthed(context, req)) return;
   const keyRaw = process.env.APPLE_MUSIC_PRIVATE_KEY;
   const keyId = process.env.APPLE_MUSIC_KEY_ID;
   const teamId = process.env.APPLE_TEAM_ID;

@@ -118,7 +118,9 @@ function clean(questions, count) {
   return out;
 }
 
+const A = require("../shared/auth");
 module.exports = async function (context, req) {
+  if (A.blockIfUnauthed(context, req)) return;
   const q = {
     title: ((req.query && req.query.title) || "").trim(),
     artist: ((req.query && req.query.artist) || "").trim(),

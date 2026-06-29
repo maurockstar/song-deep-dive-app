@@ -1,0 +1,12 @@
+{
+  "_comment": "geeek user database (local, server-side only — never served to browsers). Passwords are stored ONLY as salted scrypt hashes. Add/replace entries with: node tools/hash-password.js . Auth stays dormant until at least one user here has a salt+hash AND the AUTH_SECRET app setting is configured in Azure.",
+  "users": [
+    {
+      "u": "mauarr",
+      "role": "admin",
+      "salt": "",
+      "hash": "",
+      "created": "2026-06-29"
+    }
+  ]
+}
