@@ -34,7 +34,9 @@ module.exports = async function (context, req) {
   }
 
   // POST — open so prospective users can join the beta line.
-  const email = String((req.body && req.body.email) || "").trim().toLowerCase();
+  // Body may arrive as text/plain (to skip the CORS preflight from the website) — parse it.
+  var body = req.body; if (typeof body === "string") { try { body = JSON.parse(body); } catch (e) { body = {}; } }
+  const email = String((body && body.email) || "").trim().toLowerCase();
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 254) {
     context.res = { status: 400, headers, body: { ok: false, error: "Enter a valid email." } };
     return;
