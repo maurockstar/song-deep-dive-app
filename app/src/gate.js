@@ -11,6 +11,7 @@
   "use strict";
   var CFG = window.SDD_CONFIG || {};
   function api(p) { return (CFG.API_BASE || "/api") + p; }
+  function gateLog(a, d) { try { fetch(api("/log"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ events: [{ t: new Date().toISOString(), sid: "gate", cat: "gate", action: a, detail: d }] }) }).catch(function () {}); } catch (e) {} }
   var APPLE_CLIENT_ID = "";
   var appleReady = false;
 
@@ -88,18 +89,21 @@
       return AppleID.auth.signIn();
     }).then(function (res) {
       var idt = res && res.authorization && res.authorization.id_token;
+      gateLog("idtoken", { got: !!idt });
       if (!idt) { setMsg("No token returned from Apple.", "#FF8C7A"); return; }
       setMsg("Verifying…");
       return fetch(api("/apple-auth"), {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id_token: idt })
-      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
         .then(function (out) {
-          if (out.ok && out.j && out.j.ok) { setMsg("Welcome — opening geeek…", "#7CE2A8"); setTimeout(function () { location.reload(); }, 400); }
+          gateLog("authresult", { status: out.status, ok: !!(out.j && out.j.ok), error: out.j && out.j.error, email: out.j && out.j.email });
+          if (out.ok && out.j && out.j.ok) { setMsg("Welcome — opening geeek…", "#7CE2A8"); setTimeout(function () { location.reload(); }, 600); }
           else { setMsg((out.j && out.j.error) || "This Apple ID isn't approved yet.", "#FF8C7A"); }
         });
     }).catch(function (e) {
+      gateLog("appleerror", { error: e && (e.error || e.message || String(e)) });
       if (e && (e.error === "popup_closed_by_user" || e.error === "user_cancelled_authorize")) { setMsg(""); return; }
       setMsg("Apple sign-in didn't complete. Try again.", "#FF8C7A");
     });
@@ -121,6 +125,7 @@
     fetch(api("/session"), { credentials: "include", cache: "no-store" })
       .then(function (r) { return r.json(); })
       .then(function (j) {
+        gateLog("session", { enabled: j && j.enabled, authed: j && j.authed, hasApple: !!(j && j.appleClientId), user: j && j.user });
         if (!j || j.enabled === false || j.authed === true) { hideGate(); return; }
         APPLE_CLIENT_ID = j.appleClientId || "";
         loadAppleJs().then(initApple).catch(function () {});
