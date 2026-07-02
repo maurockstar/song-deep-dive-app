@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>geeek — promo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Space+Grotesk:wght@500;600;700&family=Baloo+2:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0E070C;--hi:#F6ECE0;--t1:#E7DACE;--mut:#BCA99B;--faded:#E3A368;--sun:#FF9F4D;--ink:#1A0B05;--grad:linear-gradient(180deg,#FFB14D,#FF8A4D)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:radial-gradient(1100px 700px at 84% -10%,rgba(255,138,77,.16),transparent 60%),radial-gradient(900px 600px at 0% 20%,rgba(255,90,60,.08),transparent 55%),var(--bg);color:var(--t1);font-family:'Space Grotesk',system-ui,sans-serif;overflow:hidden}
+.stage{position:relative;width:100vw;height:100vh}
+/* ---- official logo (g + eq bars + k), em-scaled to spec ---- */
+.logo{font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:-.03em;color:var(--hi);line-height:1;display:inline-flex;align-items:baseline;white-space:nowrap}
+.logo .bars{display:inline-flex;align-items:flex-end;gap:.067em;height:.538em;margin:0 .087em 0 .067em}
+.logo .bars i{width:.154em;border-radius:.077em;background:linear-gradient(180deg,#FFC64B,#FF8A4D);display:block}
+.logo .bars i:nth-child(1){animation:gkb1 .9s ease-in-out infinite alternate}
+.logo .bars i:nth-child(2){animation:gkb2 .78s ease-in-out infinite alternate}
+.logo .bars i:nth-child(3){animation:gkb3 1.05s ease-in-out infinite alternate}
+@keyframes gkb1{from{height:43%}to{height:96%}}
+@keyframes gkb2{from{height:93%}to{height:46%}}
+@keyframes gkb3{from{height:57%}to{height:100%}}
+/* play overlay */
+.play{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;background:var(--bg);cursor:pointer;transition:opacity .6s}
+.play.gone{opacity:0;pointer-events:none}
+.play .logo{font-size:46px}
+.pbtn{width:78px;height:78px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 14px 40px -10px rgba(255,138,77,.7)}
+.pbtn svg{width:30px;height:30px;color:var(--ink);margin-left:4px}
+.play small{color:var(--mut);font-size:14px;letter-spacing:.04em}
+/* title cards */
+.tc{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 8%;opacity:0;pointer-events:none}
+.tc.show{opacity:1}
+.tc p{font-family:'Sora',sans-serif;font-weight:800;font-size:54px;line-height:1.08;letter-spacing:-.02em;color:var(--hi)}
+.tc .hl{color:var(--sun)}
+.tc.show p{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+.tc.show p .hl{display:inline-block;animation:rise .7s cubic-bezier(.2,.7,.2,1) both .25s}
+@keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+/* device + caption */
+.devwrap{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;opacity:0;transform:scale(.97);transition:opacity .55s ease,transform .55s ease}
+.devwrap.on{opacity:1;transform:none}
+.cap{font-family:'Sora',sans-serif;font-weight:700;font-size:23px;letter-spacing:.01em;color:var(--hi);text-align:center;min-height:30px;padding:0 6%}
+.cap b{color:var(--hi)} .cap .s{color:var(--faded)}
+.cap.show{animation:rise .6s ease both .1s}
+.glow{position:relative;display:flex;align-items:center;justify-content:center}
+.glow::before{content:"";position:absolute;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(255,138,77,.22),transparent 70%);filter:blur(8px);animation:pulse 5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:.85}}
+.phone{position:relative;width:300px;height:616px;border-radius:42px;background:var(--bg);border:2px solid rgba(255,138,77,.55);box-shadow:0 30px 80px -20px rgba(0,0,0,.7),0 0 0 8px #160d12;overflow:hidden}
+.sc{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 0%;opacity:0;transition:opacity .6s ease;will-change:transform,opacity}
+/* end card */
+.endc{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;opacity:0;pointer-events:none;transition:opacity .7s}
+.endc.show{opacity:1;pointer-events:auto}
+.endc .logo{font-size:62px;margin-bottom:22px}
+.endc .tag{font-family:'Baloo 2',sans-serif;font-weight:600;font-size:27px;color:var(--faded);margin-bottom:28px}
+.endc .url{display:inline-flex;align-items:center;gap:10px;background:var(--grad);color:var(--ink);font-weight:700;font-size:18px;padding:14px 28px;border-radius:999px;box-shadow:0 12px 30px -10px rgba(255,138,77,.7);font-family:'Space Grotesk',sans-serif}
+.endc .replay{display:block;margin:24px auto 0;color:var(--mut);font-size:14px;background:none;border:none;cursor:pointer;font-family:inherit}
+.bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:#221620;z-index:40}
+.bar i{display:block;height:100%;width:0;background:var(--grad)}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="tc" id="tc"><p></p></div>
+
+  <div class="devwrap" id="dev">
+    <div class="glow"><div class="phone">
+      <img class="sc" id="scA" alt="">
+      <img class="sc" id="scB" alt="">
+    </div></div>
+    <div class="cap" id="cap"></div>
+  </div>
+
+  <div class="endc" id="endc">
+    <div class="logo">g<span class="bars"><i></i><i></i><i></i></span>k</div>
+    <div class="tag">Every song is a rabbit hole.</div>
+    <div class="url">geeek.fm · join the beta</div>
+    <button class="replay" id="replay">↻ Replay</button>
+  </div>
+
+  <div class="play" id="play">
+    <div class="logo">g<span class="bars"><i></i><i></i><i></i></span>k</div>
+    <div class="pbtn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+    <small>Play the promo</small>
+  </div>
+
+  <div class="bar"><i id="barfill"></i></div>
+  <audio id="bed" loop></audio>
+</div>
+
+<script>
+(function(){
+  var MUSIC_URL=""; /* drop a royalty-free mp3 here (e.g. "./promo-music.mp3") to play it with the promo */
+  var DD="./geeek-screen-01-deepdive.png";
+  var beats=[
+    {type:'title',html:"You're three minutes into a song you love.<br><span class='hl'>But do you really know it?</span>",dur:5000},
+    {type:'title',html:"Every song is a<br><span class='hl'>rabbit hole.</span>",dur:4000},
+    {type:'screen',img:DD,org:'50% 0%',z0:1.0,z1:1.06,cap:"Meet <b>geeek</b> — your free music companion",dur:4600},
+    {type:'screen',img:DD,org:'50% 60%',z0:1.16,z1:1.34,cap:"<span class='s'>Deep Dive</span> — the story behind every song",dur:5400},
+    {type:'screen',img:"./geeek-screen-trivia.png",org:'50% 42%',z0:1.0,z1:1.09,cap:"<span class='s'>Trivia</span> — prove you're the biggest fan",dur:5000},
+    {type:'screen',img:"./geeek-screen-karaoke.png",org:'50% 46%',z0:1.0,z1:1.09,cap:"<span class='s'>Karaoke</span> — drop the vocals, take the mic",dur:5000},
+    {type:'title',html:"Know it.<br><span class='hl'>Then go live it.</span>",dur:4400},
+    {type:'end',dur:0}
+  ];
+  var total=beats.reduce(function(a,b){return a+b.dur;},0);
+  var tc=document.getElementById('tc'),tcP=tc.querySelector('p'),dev=document.getElementById('dev'),cap=document.getElementById('cap');
+  var endc=document.getElementById('endc'),barfill=document.getElementById('barfill'),bed=document.getElementById('bed');
+  var scA=document.getElementById('scA'),scB=document.getElementById('scB');
+  var timers=[],startT=0,raf=null,front=scA,back=scB;
+
+  function clearAll(){timers.forEach(clearTimeout);timers=[];}
+
+  function showScreen(b){
+    back.src=b.img; back.style.transformOrigin=b.org; back.style.objectPosition=b.org;
+    back.style.transition='none'; back.style.transform='scale('+b.z0+')';
+    void back.offsetWidth;
+    back.style.transition='opacity .6s ease, transform '+(b.dur+600)+'ms ease';
+    back.style.opacity=1; back.style.transform='scale('+b.z1+')';
+    front.style.opacity=0;
+    var t=front; front=back; back=t;
+  }
+
+  function show(i){
+    clearAll();
+    if(i>=beats.length) return;
+    var b=beats[i];
+    tc.classList.remove('show'); endc.classList.remove('show');
+    if(b.type==='title'){
+      dev.classList.remove('on');
+      tcP.innerHTML=b.html; void tc.offsetWidth; tc.classList.add('show');
+    }else if(b.type==='screen'){
+      dev.classList.add('on'); showScreen(b);
+      cap.classList.remove('show'); cap.innerHTML=b.cap; void cap.offsetWidth; cap.classList.add('show');
+    }else if(b.type==='end'){
+      dev.classList.remove('on'); endc.classList.add('show');
+      if(bed.src){try{bed.pause();}catch(e){}} return;
+    }
+    timers.push(setTimeout(function(){show(i+1);},b.dur));
+  }
+  function tick(){var e=Date.now()-startT;barfill.style.width=Math.min(100,e/total*100)+'%';raf=requestAnimationFrame(tick);}
+  function start(){
+    document.getElementById('play').classList.add('gone');
+    front=scA;back=scB;scA.style.opacity=0;scB.style.opacity=0;
+    if(MUSIC_URL){bed.src=MUSIC_URL;bed.volume=.85;bed.play().catch(function(){});}
+    startT=Date.now();cancelAnimationFrame(raf);tick();show(0);
+  }
+  document.getElementById('play').addEventListener('click',start);
+  document.getElementById('replay').addEventListener('click',function(){endc.classList.remove('show');start();});
+})();
+</script>
+</body>
+</html>
