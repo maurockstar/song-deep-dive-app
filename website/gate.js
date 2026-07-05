@@ -15,18 +15,20 @@
   root.setAttribute("aria-label", "Sign in to geeek");
   root.innerHTML =
     '<style>' +
-    '#gkGate{position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Space Grotesk",system-ui,sans-serif}' +
+    '#gkGate{position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:"Space Grotesk",system-ui,sans-serif}' +
     '#gkGate.gk-hide{display:none}' +
-    '#gkGate .lg{cursor:pointer;font-weight:700;font-size:62px;letter-spacing:-.03em;line-height:1;color:#F6ECE0;white-space:nowrap;user-select:none;transition:transform .18s ease,filter .18s ease}' +
+    '#gkGate .lg{cursor:pointer;font-weight:700;font-size:clamp(44px,12vw,108px);letter-spacing:-.03em;line-height:1;color:#F6ECE0;white-space:nowrap;user-select:none;transition:transform .18s ease,filter .18s ease}' +
     '#gkGate .lg:hover{transform:scale(1.05);filter:drop-shadow(0 0 22px rgba(255,138,77,.5))}' +
-    '#gkGate .bars{display:inline-flex;align-items:flex-end;gap:3px;height:31px;margin:0 5px;vertical-align:baseline}' +
-    '#gkGate .bars i{width:8px;border-radius:3px;background:linear-gradient(180deg,#FFC64B,#FF8A4D);display:block}' +
-    '#gkGate .bars i:nth-child(1){animation:gkB1 .9s ease-in-out infinite alternate}' +
-    '#gkGate .bars i:nth-child(2){animation:gkB2 .78s ease-in-out infinite alternate}' +
-    '#gkGate .bars i:nth-child(3){animation:gkB3 1.05s ease-in-out infinite alternate}' +
-    '@keyframes gkB1{from{height:14px}to{height:31px}}@keyframes gkB2{from{height:30px}to{height:14px}}@keyframes gkB3{from{height:18px}to{height:31px}}' +
-    '@keyframes gkHint{0%,100%{opacity:.35}50%{opacity:.7}}' +
-    '#gkGate .hint{margin-top:22px;font-size:13px;letter-spacing:.04em;color:#fff;animation:gkHint 2.2s ease-in-out infinite}' +
+    '#gkGate .bars{display:inline-flex;align-items:flex-end;gap:.067em;height:.54em;margin:0 .03em 0 .065em;vertical-align:baseline}' +
+    '#gkGate .bars i{width:.23em;border-radius:.058em;display:block}' +
+    '#gkGate .bars i:nth-child(1){height:.29em;animation:gkB1 .9s ease-in-out infinite alternate,gkC1 20s ease-in-out infinite}' +
+    '#gkGate .bars i:nth-child(2){height:.54em;animation:gkB2 .78s ease-in-out infinite alternate,gkC2 20s ease-in-out infinite}' +
+    '#gkGate .bars i:nth-child(3){height:.42em;animation:gkB3 1.05s ease-in-out infinite alternate,gkC3 20s ease-in-out infinite}' +
+    '@keyframes gkB1{from{height:.23em}to{height:.52em}}@keyframes gkB2{from{height:.5em}to{height:.25em}}@keyframes gkB3{from{height:.3em}to{height:.54em}}' +
+    '@keyframes gkC1{0%,20%{background:#D33A16}25%,45%{background:#1E4FD9}50%,70%{background:#148A3D}75%,95%{background:#C41230}100%{background:#D33A16}}' +
+    '@keyframes gkC2{0%,20%{background:#FF6E3E}25%,45%{background:#2E86E6}50%,70%{background:#1DB954}75%,95%{background:#FA2D48}100%{background:#FF6E3E}}' +
+    '@keyframes gkC3{0%,20%{background:#FF9E3C}25%,45%{background:#5CC8FF}50%,70%{background:#4BE37B}75%,95%{background:#FF6E82}100%{background:#FF9E3C}}' +
+    '@media (prefers-reduced-motion:reduce){#gkGate .bars i{animation:none}#gkGate .bars i:nth-child(1){height:.29em;background:#D33A16}#gkGate .bars i:nth-child(2){height:.54em;background:#FF6E3E}#gkGate .bars i:nth-child(3){height:.42em;background:#FF9E3C}}' +
     '#gkGate .ov{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}' +
     '#gkGate .ov.show{display:flex}' +
     '#gkGate .dlg{width:320px;max-width:88%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:16px;padding:24px 22px 22px;color:#fff;text-align:center}' +
@@ -36,8 +38,7 @@
     '#gkGate .appleBtn{width:100%;padding:12px 14px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600;font-size:15px;background:#fff;color:#000;display:flex;align-items:center;justify-content:center;gap:8px}' +
     '#gkGate .msg{min-height:18px;margin-top:14px;font-size:12.5px;color:rgba(255,255,255,.7);line-height:1.5}' +
     '</style>' +
-    '<div class="lg" id="gkLg" role="button" tabindex="0" aria-label="Open sign in">g<span class="bars"><i></i><i></i><i></i></span>k</div>' +
-    '<div class="hint">click the logo to sign in</div>' +
+    '<div class="lg" id="gkLg" role="button" tabindex="0" aria-label="Sign in to geeek">g<span class="bars"><i></i><i></i><i></i></span>k</div>' +
     '<div class="ov" id="gkOv"><div class="dlg" id="gkDlg">' +
     '<div class="hd"><span>Sign in to geeek</span><span class="x" id="gkX">&times;</span></div>' +
     '<div class="sub">Use your Apple ID to continue</div>' +
@@ -47,7 +48,8 @@
     '<div class="msg" id="gkMsg"></div>' +
     '</div></div>';
 
-  function mount() { if (document.getElementById("gkGate")) return; root.classList.add("gk-hide"); (document.body || document.documentElement).appendChild(root); wire(); check(); }
+  function ensureFont() { if (document.getElementById("gkFont")) return; var f = document.createElement("link"); f.id = "gkFont"; f.rel = "stylesheet"; f.href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&display=swap"; document.head.appendChild(f); }
+  function mount() { if (document.getElementById("gkGate")) return; ensureFont(); root.classList.add("gk-hide"); (document.body || document.documentElement).appendChild(root); wire(); check(); }
   function removePre() { var e = document.getElementById("gk-pre"); if (e && e.parentNode) e.parentNode.removeChild(e); }
   function hideGate() { root.classList.add("gk-hide"); removePre(); }
   function showGate() { root.classList.remove("gk-hide"); removePre(); }
