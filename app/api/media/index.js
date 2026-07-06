@@ -13,6 +13,16 @@ const cache = new Map();
 const CACHE_MAX = 300;
 
 function nrm(x) { return (x || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+// Stable identity for an image so the SAME picture from different sources/sizes de-dupes.
+// (Wikimedia Special:FilePath with underscores vs %20 and different ?width= are the SAME file.)
+function photoId(u) {
+  if (!u) return "";
+  let s = String(u).split("?")[0];
+  const m = s.match(/Special:FilePath\/(.+)$/i);
+  if (m) { try { return "wm:" + nrm(decodeURIComponent(m[1])); } catch (e) { return "wm:" + nrm(m[1]); } }
+  s = s.replace(/\/\d+x\d+bb\.(jpg|png)$/i, "");   // iTunes: ignore the size segment
+  return nrm(s);
+}
 // Collapse album editions: "King Animal (Deluxe Version)" == "King Animal"; "Superunknown (20th Anniversary)" == "Superunknown (Deluxe Edition)".
 function baseAlbumKey(x) {
   return (x || "").toLowerCase()
@@ -65,7 +75,7 @@ async function commonsPhotos(artist, max) {
     "&gsrnamespace=6&gsrlimit=30&prop=imageinfo&iiprop=url|size|mime&format=json&origin=*";
   const j = await jget(url, {});
   const pages = (j && j.query && j.query.pages) ? Object.values(j.query.pages) : [];
-  const bad = /(logo|cover|album|poster|single|tracklist|setlist|ticket|autograph|signature|font|typeface|wordmark|vinyl|cd|cassette|artwork|sticker|flyer|map|diagram)/i;
+  const bad = /(logo|cover|album|poster|single|tracklist|setlist|ticket|autograph|signature|font|typeface|wordmark|vinyl|cd|cassette|artwork|sticker|flyer|map|diagram|graph|timeline|chart|discograph|members|line[\s-]?up|tour dates|schedule|infobox|svg)/i;
   const artKey = nrm(artist);
   const seen = {}, out = [];
   for (const p of pages) {
@@ -166,15 +176,15 @@ module.exports = async function (context, req) {
 
   const items = [];
   const seenUrl = {};
-  function add(it) { if (!it) return; var k = nrm(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; items.push(it); }
+  function add(it) { if (!it) return; var k = photoId(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; items.push(it); }
 
   // 1) Lead band photo — prefer a hi-res Wikipedia/Commons photo (real, never a logo), else Deezer.
   const lead = (wikiPhoto && wikiPhoto.w >= 600) ? wikiPhoto : (dzPhoto || wikiPhoto);
   add(lead);
   // 2) Real band/concert/candid photos from Commons — variety beyond album art.
   commons.forEach(add);
-  // 3) A Deezer band photo too, if we didn't already lead with it and it's distinct.
-  if (dzPhoto && lead !== dzPhoto) add(dzPhoto);
+  // 3) Deezer photo ONLY as a fallback when we found no real photos (it's often just the band's logo).
+  if (!items.length && dzPhoto) add(dzPhoto);
   // 4) Album art — the now-playing cover, then other albums (fuzzy-deduped, current album excluded).
   add(cover);
   const coverKey = cover ? baseAlbumKey(cover.title) : "";
