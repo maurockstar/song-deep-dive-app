@@ -65,23 +65,33 @@ async function deezerPhoto(artist) {
     url: a.picture_xl,
     thumb: a.picture_medium || a.picture_big || a.picture_xl,
     title: a.name || artist,
-    w: 1000, h: 1000
+    w: 1000, h: 1000,
+    src: "deezer"
   };
 }
 
+// Rebuild a Wikimedia thumb URL at a chosen width (capped at the original) — crisp without pulling the multi-MB original.
+function wikiSized(thumbUrl, origUrl, width) {
+  if (thumbUrl && /\/\d+px-[^/]+$/.test(thumbUrl)) return thumbUrl.replace(/\/\d+px-([^/]+)$/, "/" + width + "px-$1");
+  return origUrl || thumbUrl || "";
+}
+// Wikipedia/Commons infobox photo — encyclopedic, so it's a REAL band/artist photo (not a label logo).
 async function artistPhoto(artist) {
   if (!artist) return null;
   const cands = [artist, artist + " (band)", artist + " (musician)", artist + " (singer)"];
   for (const c of cands) {
     const s = await jget(WIKI + encodeURIComponent(c), {});
     if (s && s.type !== "disambiguation" && s.originalimage && s.originalimage.source) {
+      const orig = s.originalimage.source;
+      const th = (s.thumbnail && s.thumbnail.source) || orig;
       return {
         type: "photo",
-        url: s.originalimage.source,
-        thumb: (s.thumbnail && s.thumbnail.source) || s.originalimage.source,
+        url: wikiSized(th, orig, 1400),   // crisp lead + fullscreen, sane bandwidth
+        thumb: wikiSized(th, orig, 400),
         title: artist,
-        w: s.originalimage.width || 0,   // let the client skip tiny (fair-use) photos that would look blurry
-        h: s.originalimage.height || 0
+        w: s.originalimage.width || 0,    // original width — used to prefer hi-res encyclopedic photos & gate tiny ones
+        h: s.originalimage.height || 0,
+        src: "wikipedia"
       };
     }
   }
@@ -101,7 +111,9 @@ module.exports = async function (context, req) {
   const [dzPhoto, wikiPhoto, cover, albs] = await Promise.all([deezerPhoto(artist), artistPhoto(artist), songCover(title, artist), albums(artist)]);
 
   const items = [];
-  const photo = dzPhoto || wikiPhoto;   // prefer the hi-res Deezer band photo; fall back to Wikipedia
+  // A hi-res Wikipedia/Commons photo is a REAL band photo (never a logo) -> prefer it.
+  // Otherwise use Deezer (usually a real photo, occasionally a logo), then a low-res Wikipedia as last resort.
+  const photo = (wikiPhoto && wikiPhoto.w >= 600) ? wikiPhoto : (dzPhoto || wikiPhoto);
   if (photo) items.push(photo);
   if (cover) items.push(cover);
   for (const a of albs) {
