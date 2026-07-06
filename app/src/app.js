@@ -89,9 +89,12 @@
     return (c && (c.body || c.title)) || "";
   }
   function skeletonCards() {
-    panel.innerHTML = '<div class="ff-card skeleton"><div class="ff-kicker">Fun fact</div>'
-      + '<div class="ff-fact">Reading the room…</div>'
-      + '<div class="ff-pager"><span class="lit"></span><span></span><span></span><span></span><span></span></div></div>';
+    panel.innerHTML = '<article class="st-read">'
+      + '<div class="st-hero st-hero-ph skeleton"></div>'
+      + '<div class="st-kicker">The story</div>'
+      + '<div class="st-headline skeleton" style="height:26px;max-width:80%;border-radius:8px">&nbsp;</div>'
+      + '<div class="st-body"><p class="st-p skeleton">Reading the room and gathering the story…</p>'
+      + '<p class="st-p skeleton">One moment.</p></div></article>';
   }
   function renderFunFact() {
     var cards = DD.cards;
@@ -118,12 +121,81 @@
     DD.deep = false;
     renderFunFact();
   }
-  function renderCards(payload) {
-    var cards = (payload && payload.cards) || [];
-    if (!cards.length) { notePanel("No deep dive for this one yet — try another song."); return; }
-    DD = { cards: cards, i: 0, deep: false };
-    renderFunFact();
+  // ---------- deep dive: editorial STORY long-read (ports the prototype's Story) ----------
+  function storyBlocksHtml(blocks) {
+    var h = "";
+    var arr = blocks || [];
+    for (var i = 0; i < arr.length; i++) {
+      var b = arr[i];
+      if (!b || !b.text) continue;
+      if (b.type === "quote") h += '<blockquote class="st-quote">' + esc(b.text) + '</blockquote>';
+      else h += '<p class="st-p">' + esc(b.text) + '</p>';
+    }
+    return h;
   }
+  function deriveStory(payload) {
+    if (payload && payload.story && payload.story.headline) return payload.story;
+    var cards = (payload && payload.cards) || [];
+    if (!cards.length) return null;
+    var body = [];
+    for (var i = 1; i < cards.length; i++) {
+      var c = cards[i]; if (!c) continue;
+      if (c.body) body.push({ type: (i % 3 === 2 ? "quote" : "p"), text: c.body });
+      if (c.extra) body.push({ type: "p", text: c.extra });
+    }
+    return { headline: (cards[0] && cards[0].title) || ((cur && cur.title) || "The story"), dek: (cards[0] && cards[0].body) || "", body: body };
+  }
+  var storyMediaSeq = 0;
+  function enrichStoryMedia(payload) {
+    // "rich when available": slot a real artist photo mid-story if the media API returns one.
+    var seq = ++storyMediaSeq;
+    var t = (payload && payload.track) || cur;
+    if (!t || !t.artist) return;
+    try {
+      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "" }).toString())
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (seq !== storyMediaSeq || curTab !== "cards") return;
+          var items = (d && d.items) || [];
+          var img = null;
+          for (var i = 0; i < items.length; i++) { if (items[i] && (items[i].thumb || items[i].url)) { img = items[i]; break; } }
+          if (!img) return;
+          var bodyEl = panel.querySelector(".st-body");
+          if (!bodyEl) return;
+          var blocks = bodyEl.querySelectorAll(".st-p, .st-quote");
+          if (blocks.length < 2) return;
+          var fig = document.createElement("figure");
+          fig.className = "st-media";
+          fig.innerHTML = '<div class="st-media-img" style="background-image:url(&quot;' + esc(img.thumb || img.url) + '&quot;)"></div><figcaption>' + esc(t.artist || "") + '</figcaption>';
+          var ref = blocks[1];
+          if (ref.nextSibling) ref.parentNode.insertBefore(fig, ref.nextSibling); else ref.parentNode.appendChild(fig);
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+  function renderStory(payload) {
+    var story = deriveStory(payload);
+    if (!story) { notePanel("No deep dive for this one yet — try another song."); return; }
+    var art = (cur && cur.art) ? esc(cur.art) : "";
+    var hero = art
+      ? '<div class="st-hero" style="background-image:url(&quot;' + art + '&quot;)"></div>'
+      : '<div class="st-hero st-hero-ph"></div>';
+    var metaParts = [];
+    if (cur && cur.artist) metaParts.push(cur.artist);
+    if (cur && cur.album) metaParts.push(cur.album);
+    if (payload && payload._meta && payload._meta.year) metaParts.push(payload._meta.year);
+    var meta = esc(metaParts.join(" · "));
+    panel.innerHTML = '<article class="st-read">'
+      + hero
+      + '<div class="st-kicker">The story</div>'
+      + '<h2 class="st-headline">' + esc(story.headline || "") + '</h2>'
+      + (story.dek ? '<p class="st-dek">' + esc(story.dek) + '</p>' : '')
+      + (meta ? '<div class="st-meta">' + meta + '</div>' : '')
+      + '<div class="st-body">' + storyBlocksHtml(story.body) + '</div>'
+      + '</article>';
+    enrichStoryMedia(payload);
+  }
+  function renderCards(payload) { renderStory(payload); }
   async function loadDeepDive(track) {
     if (!track) { welcome(); return; }
     var mine = ++loadSeq;

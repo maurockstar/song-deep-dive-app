@@ -19,5 +19,5 @@ window.SDD_CONFIG = {
   API_BASE: "/api",
 
   // App version — single source of truth (bumping it also invalidates the local card cache).
-  VERSION: "1.0"
+  VERSION: "2.0"
 };
