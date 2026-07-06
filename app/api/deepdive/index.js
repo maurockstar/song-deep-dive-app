@@ -320,6 +320,16 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // Admin cleanup (token-guarded; server-side only, never exposed to clients):
+  // /api/deepdive?diag=del&key=<exact-shared-key>&t=<token> — deletes ONE orphaned/duplicate cache key.
+  if (req.query && req.query.diag === "del") {
+    if (req.query.t !== "gk9f3k2m8x7q_admin") { context.res = { status: 403, headers: { "Content-Type": "application/json" }, body: { error: "forbidden" } }; return; }
+    const k = String(req.query.key || "");
+    const deleted = k ? await redisCmd(["DEL", k]) : 0;
+    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: { key: k, deleted: deleted } };
+    return;
+  }
+
   // Read-only cache inspector: /api/deepdive?diag=keys&pat=protection — lists matching shared-cache
   // entries with their story headline (public content only; no secrets). Helps spot duplicates.
   if (req.query && req.query.diag === "keys") {
