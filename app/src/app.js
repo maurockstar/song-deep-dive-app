@@ -68,7 +68,11 @@
 
   // ---------- deep-dive cache ----------
   var CACHE_PREFIX = "sdd:cards:v" + ((CFG && CFG.VERSION) || "0") + ":";
-  function cacheKey(t) { return CACHE_PREFIX + ((t.title || "") + "|" + (t.artist || "")).toLowerCase().replace(/\s+/g, "_"); }
+  // Canonical key mirrors the server: same song -> same story, regardless of edition/feature noise.
+  function ckNorm(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
+  function ckTitle(t) { return String(t || "").replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ").replace(/\s[-–—]\s.*$/, " "); }
+  function ckArtist(a) { return String(a || "").split(/,|&|;|\/|feat\.?|featuring|\bwith\b|\bx\b|vs\.?/i)[0]; }
+  function cacheKey(t) { return CACHE_PREFIX + (ckNorm(ckTitle(t.title)) + "|" + ckNorm(ckArtist(t.artist))).replace(/\s+/g, "_"); }
   function cacheGet(t) { try { var r = localStorage.getItem(cacheKey(t)); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
   function cacheSet(t, p) { try { localStorage.setItem(cacheKey(t), JSON.stringify(p)); } catch (e) {} }
   function isAi(p) { return !!(p && p._meta && typeof p._meta.source === "string" && p._meta.source.indexOf("ai") === 0); }

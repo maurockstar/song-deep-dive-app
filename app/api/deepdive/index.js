@@ -32,9 +32,13 @@ const SHARED_TTL = 60 * 60 * 24 * 90; // keep cached cards for 90 days
 const cache = new Map();       // key -> finished payload (AI or open-data)
 const factsCache = new Map();  // key -> gathered facts (shared by fast + full calls)
 const CACHE_MAX = 500;
-function cacheKey(q) { return ("song:" + q.title + "|" + q.artist).toLowerCase().replace(/\s+/g, "_"); }
 function capped(map) { if (map.size > CACHE_MAX) map.clear(); }
 function norm(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
+// Canonical key: the STORY is about the song, so ignore edition/feature noise that would otherwise
+// split one song into several cache entries (and several different AI stories).
+function primaryArtist(a) { return String(a || "").split(/,|&|;|\/|\bfeat\.?\b|\bfeaturing\b|\bwith\b|\bx\b|\bvs\.?\b/i)[0]; }
+function songTitleBase(t) { return String(t || "").replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ").replace(/\s[-–—]\s.*$/, " "); }
+function cacheKey(q) { return ("song:" + norm(songTitleBase(q.title)) + "|" + norm(primaryArtist(q.artist))).replace(/\s+/g, "_"); }
 
 async function jget(url, headers, ms) {
   const ctrl = new AbortController();
@@ -70,6 +74,11 @@ async function sharedGet(skey) {
 }
 async function sharedSet(skey, payload) {
   try { await redisCmd(["SET", skey, JSON.stringify(payload), "EX", String(SHARED_TTL)]); } catch (e) {}
+}
+// First-writer-wins: only set if the song has no story yet. Returns true if WE wrote it.
+async function sharedSetNX(skey, payload) {
+  try { return (await redisCmd(["SET", skey, JSON.stringify(payload), "NX", "EX", String(SHARED_TTL)])) === "OK"; }
+  catch (e) { return false; }
 }
 
 async function bestRecording(title, artist) {
@@ -311,6 +320,27 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // Read-only cache inspector: /api/deepdive?diag=keys&pat=protection — lists matching shared-cache
+  // entries with their story headline (public content only; no secrets). Helps spot duplicates.
+  if (req.query && req.query.diag === "keys") {
+    const raw = String(req.query.pat || "").toLowerCase().replace(/[^a-z0-9]+/g, "*");
+    const pat = "sdd:*" + (raw || "") + "*";
+    let cursor = "0"; const keys = [];
+    for (let i = 0; i < 30; i++) {
+      const res = await redisCmd(["SCAN", cursor, "MATCH", pat, "COUNT", "300"]);
+      if (!res || !Array.isArray(res)) break;
+      cursor = res[0]; (res[1] || []).forEach(function (k) { keys.push(k); });
+      if (cursor === "0") break;
+    }
+    const entries = [];
+    for (const k of keys.slice(0, 50)) {
+      const v = await sharedGet(k);
+      entries.push({ key: k, headline: v && v.story && v.story.headline, generatedAt: v && v._meta && v._meta.generatedAt });
+    }
+    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: { pattern: pat, count: keys.length, entries: entries } };
+    return;
+  }
+
   if (!q.title) {
     context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Provide ?title=" } };
     return;
@@ -362,17 +392,27 @@ module.exports = async function (context, req) {
   const cards = aiUsed ? ai.cards : templateCards(facts);
   const story = (aiUsed && ai.story) ? ai.story : templateStory(facts, cards);
 
-  const payload = {
+  let payload = {
     track: { id: q.id, title: q.title, artist: q.artist },
     cards, story,
     _meta: { source: aiUsed ? "ai+open-data" : "open-data (add ANTHROPIC_API_KEY for AI)", year: facts.year || null, generatedAt: new Date().toISOString() }
   };
   capped(cache);
-  // Cache AI results; also cache the template only when there is NO key (permanent fallback).
-  // If a key exists but AI failed transiently, don't cache the template so the next request retries AI.
-  if (aiUsed || !apiKey) cache.set(key, payload);
-  // Persist to the shared cache so every other user gets it free — only real AI results.
-  if (aiUsed) await sharedSet(skey, payload);
+  if (aiUsed) {
+    // ONE canonical story per song: first request to finish LOCKS the story (SET NX). The AI is
+    // non-deterministic, so if two requests race, the loser adopts the winner's story instead of
+    // caching its own — every device/instance then converges to exactly one story.
+    const won = await sharedSetNX(skey, payload);
+    if (!won) {
+      const existing = await sharedGet(skey);
+      if (existing && existing.cards && existing.cards.length) payload = existing;
+    }
+    cache.set(key, payload);
+  } else if (!apiKey) {
+    // No AI key -> template is the permanent fallback; cache it. (If a key exists but AI failed
+    // transiently, don't cache the template so the next request retries the AI.)
+    cache.set(key, payload);
+  }
 
   context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: payload };
 };
