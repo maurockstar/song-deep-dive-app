@@ -218,17 +218,28 @@ async function writeCardsWithClaude(apiKey, f, context) {
   } catch (e) { context.log("anthropic error", e.message); return null; } finally { clearTimeout(timer); }
 }
 
+// Truncate at a sentence end when possible, else at a word boundary (+ ellipsis) — never mid-word.
+function clip(text, maxChars) {
+  if (!text) return "";
+  const t = String(text).replace(/\s+/g, " ").trim();
+  if (t.length <= maxChars) return t;
+  const cut = t.slice(0, maxChars);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  if (end > maxChars * 0.5) return cut.slice(0, end + 1).trim();
+  const sp = cut.lastIndexOf(" ");
+  return (sp > 0 ? cut.slice(0, sp) : cut).replace(/[,;:.\-\s]+$/, "").trim() + "…";
+}
 function templateCards(f) {
   const yr = f.year ? ` (${f.year})` : "";
   const who = f.mbArtist || f.artist || "the artist";
   const credits = f.credits.length ? f.credits.slice(0, 6).join(" · ") : "Producer/writer credits will fill in from open data.";
   const wiki = f.wiki || f.wikiArtist || "A short, sourced background will appear here.";
   return [
-    { kicker: "The story", title: `About “${f.title}”${yr}`, body: wiki.slice(0, 120), extra: wiki.slice(120, 280) || "More background as we enrich the data." },
+    { kicker: "The story", title: `About “${f.title}”${yr}`, body: clip(wiki, 150), extra: clip(wiki.slice(150), 160) || "More background as we enrich the data." },
     { kicker: "The people", title: "Who made it", body: `Performed by ${who}.`, extra: credits },
     { kicker: "Connections", title: "How it connects", body: `Related artists and influences around ${who}.`, extra: "Built from open relationship data (MusicBrainz)." },
-    { kicker: "Fun facts", title: "Quick facts", body: f.wikiArtist ? f.wikiArtist.slice(200, 280) : "Fun facts appear here once AI writing is on.", extra: f.wiki ? f.wiki.slice(560, 670) : "" },
-    { kicker: "Did you know", title: "A fact to share", body: f.wikiArtist ? f.wikiArtist.slice(0, 100) : `Tap to learn more about ${who}.`, extra: "Then go enjoy it out loud." }
+    { kicker: "Fun facts", title: "Quick facts", body: f.wikiArtist ? clip(f.wikiArtist, 150) : "Fun facts appear here once AI writing is on.", extra: f.wikiArtist ? clip(f.wikiArtist.slice(150), 150) : "" },
+    { kicker: "Did you know", title: "A fact to share", body: f.wikiArtist ? clip(f.wikiArtist, 110) : `Tap to learn more about ${who}.`, extra: "Then go enjoy it out loud." }
   ];
 }
 
@@ -236,16 +247,14 @@ function templateStory(f, cards) {
   const who = f.mbArtist || f.artist || "the artist";
   const yr = f.year ? (" (" + f.year + ")") : "";
   const body = [];
-  if (f.wiki) body.push({ type: "p", text: f.wiki.slice(0, 320) });
+  if (f.wiki) body.push({ type: "p", text: clip(f.wiki, 500) });
   body.push({ type: "p", text: "Performed by " + who + (f.year ? (", first released in " + f.year) : "") + "." });
   if (f.credits && f.credits.length) body.push({ type: "p", text: f.credits.slice(0, 6).join(" \u00b7 ") });
-  if (f.wikiArtist) body.push({ type: "p", text: f.wikiArtist.slice(0, 260) });
+  if (f.wikiArtist) body.push({ type: "p", text: clip(f.wikiArtist, 360) });
   if (body.length < 2) body.push({ type: "p", text: "A fuller story will appear here as we enrich the data." });
-  return {
-    headline: f.title + yr,
-    dek: (cards && cards[0] && cards[0].body) || ("The story behind " + f.title + "."),
-    body: body
-  };
+  // Distinct hook — deliberately NOT a slice of the body, so it never repeats the opening paragraph.
+  const dek = "The story behind “" + f.title + "”" + (who && who !== "the artist" ? " by " + who : "") + ".";
+  return { headline: f.title + yr, dek: dek, body: body };
 }
 
 async function getFacts(key, q, context) {
@@ -359,7 +368,9 @@ module.exports = async function (context, req) {
     _meta: { source: aiUsed ? "ai+open-data" : "open-data (add ANTHROPIC_API_KEY for AI)", year: facts.year || null, generatedAt: new Date().toISOString() }
   };
   capped(cache);
-  cache.set(key, payload);
+  // Cache AI results; also cache the template only when there is NO key (permanent fallback).
+  // If a key exists but AI failed transiently, don't cache the template so the next request retries AI.
+  if (aiUsed || !apiKey) cache.set(key, payload);
   // Persist to the shared cache so every other user gets it free — only real AI results.
   if (aiUsed) await sharedSet(skey, payload);
 

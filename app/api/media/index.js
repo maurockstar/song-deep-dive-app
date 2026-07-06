@@ -37,7 +37,7 @@ async function albums(artist) {
     const key = (r.collectionName || "").toLowerCase();
     if (seen[key]) continue;
     seen[key] = 1;
-    out.push({ type: "album", url: hi(r.artworkUrl100, 1200), thumb: hi(r.artworkUrl100, 200), title: r.collectionName });
+    out.push({ type: "album", url: hi(r.artworkUrl100, 1400), thumb: hi(r.artworkUrl100, 200), title: r.collectionName });
     if (out.length >= 8) break;
   }
   return out;
@@ -49,7 +49,7 @@ async function songCover(title, artist) {
   const d = await jget(url, {});
   const r = (d && d.results && d.results[0]) || null;
   if (!r || !r.artworkUrl100) return null;
-  return { type: "album", url: hi(r.artworkUrl100, 1200), thumb: hi(r.artworkUrl100, 200), title: r.collectionName || title };
+  return { type: "album", url: hi(r.artworkUrl100, 1400), thumb: hi(r.artworkUrl100, 200), title: r.collectionName || title };
 }
 
 async function artistPhoto(artist) {
@@ -58,7 +58,14 @@ async function artistPhoto(artist) {
   for (const c of cands) {
     const s = await jget(WIKI + encodeURIComponent(c), {});
     if (s && s.type !== "disambiguation" && s.originalimage && s.originalimage.source) {
-      return { type: "photo", url: s.originalimage.source, thumb: (s.thumbnail && s.thumbnail.source) || s.originalimage.source, title: artist };
+      return {
+        type: "photo",
+        url: s.originalimage.source,
+        thumb: (s.thumbnail && s.thumbnail.source) || s.originalimage.source,
+        title: artist,
+        w: s.originalimage.width || 0,   // let the client skip tiny (fair-use) photos that would look blurry
+        h: s.originalimage.height || 0
+      };
     }
   }
   return null;

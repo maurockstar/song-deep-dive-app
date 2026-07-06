@@ -187,6 +187,7 @@
           function add(it) {
             if (!it) return;
             var url = it.url || it.thumb; if (!url) return;
+            if (it.type === "photo" && it.w && it.w < 600) return;                       // skip tiny (fair-use) photos — they look blurry full-width / full-screen
             var base = artBase(url);
             if (seen[base]) return;                                                      // same image at any size
             if (curArt && (url === curArt || base === curArtBase)) return;               // exact same file as the now-playing cover
@@ -194,8 +195,8 @@
             seen[base] = 1;
             imgs.push({ url: url, cap: it.title || t.artist || "" });
           }
-          items.forEach(function (it) { if (it && it.type === "photo") add(it); }); // artist photos first (never a cover)
-          items.forEach(function (it) { if (it && it.type !== "photo") add(it); }); // then other album covers
+          items.forEach(function (it) { if (it && it.type === "photo") add(it); }); // hi-res artist photos first (never a cover)
+          items.forEach(function (it) { if (it && it.type !== "photo") add(it); }); // then other album covers (excluding the now-playing one)
           imgs = imgs.slice(0, 3);
           if (!imgs.length) return;
           imgs.forEach(function (mm, idx) {
@@ -251,13 +252,18 @@
     if (cur && cur.album) metaParts.push(cur.album);
     if (payload && payload._meta && payload._meta.year) metaParts.push(payload._meta.year);
     var meta = esc(metaParts.join(" \u00b7 "));
+    // Drop the dek when it just repeats (a prefix/substring of) the opening paragraph \u2014 keep the fuller text.
+    var dek = story.dek || "";
+    var body0 = (story.body && story.body[0] && story.body[0].text) || "";
+    var dN = nrmTxt(dek), bN = nrmTxt(body0);
+    if (dN && bN && (dN === bN || dN.indexOf(bN) > -1 || bN.indexOf(dN) > -1)) dek = "";
     panel.innerHTML = '<article class="st-read">'
       + '<div class="st-lead" id="st-lead"></div>'
       + '<div class="st-kicker">The story</div>'
       + '<h2 class="st-headline">' + esc(story.headline || "") + '</h2>'
-      + (story.dek ? '<p class="st-dek">' + esc(story.dek) + '</p>' : '')
+      + (dek ? '<p class="st-dek">' + esc(dek) + '</p>' : '')
       + (meta ? '<div class="st-meta">' + meta + '</div>' : '')
-      + '<div class="st-body">' + storyBlocksHtml(story.body, [story.headline, story.dek]) + '</div>'
+      + '<div class="st-body">' + storyBlocksHtml(story.body, [story.headline, dek]) + '</div>'
       + '</article>';
     enrichStoryRetry(payload, 5);
   }
