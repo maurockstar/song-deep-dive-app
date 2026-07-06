@@ -160,7 +160,7 @@
           var img = null;
           for (var i = 0; i < items.length; i++) { if (items[i] && (items[i].thumb || items[i].url)) { img = items[i]; break; } }
           if (!img) return;
-          var imgUrl = img.thumb || img.url;
+          var imgUrl = img.url || img.thumb; // high-res first
           if (!imgUrl) return;
           // Render as a real <img> (iOS Safari fails to paint large CSS background-images),
           // and only insert the figure once it actually loads — so no empty box on any browser.
@@ -168,6 +168,8 @@
           im.className = "st-media-img";
           im.loading = "lazy"; im.decoding = "async";
           im.alt = t.artist || "";
+          im.style.cursor = "zoom-in";
+          im.addEventListener("click", function () { openStoryPhoto(imgUrl, t.artist || ""); });
           im.onload = function () {
             if (seq !== storyMediaSeq || curTab !== "cards") return;
             if (panel.querySelector(".st-media")) return;
@@ -210,6 +212,8 @@
       + (meta ? '<div class="st-meta">' + meta + '</div>' : '')
       + '<div class="st-body">' + storyBlocksHtml(story.body) + '</div>'
       + '</article>';
+    var heroEl = panel.querySelector(".st-hero");
+    if (heroEl && cur && cur.art) { heroEl.style.cursor = "zoom-in"; heroEl.addEventListener("click", function () { openStoryPhoto(cur.art, cur.title || cur.artist || ""); }); }
     enrichStoryMedia(payload);
   }
   function renderCards(payload) { renderStory(payload); }
@@ -611,6 +615,21 @@
   }
 
   // ---------- lightbox ----------
+  var stLb = null;
+  function openStoryPhoto(url, caption) {
+    if (!url) return;
+    if (!stLb) {
+      stLb = document.createElement("div");
+      stLb.className = "st-lb";
+      stLb.innerHTML = '<img alt=""><div class="cap"></div>';
+      stLb.addEventListener("click", function () { stLb.classList.remove("open"); });
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape" && stLb) stLb.classList.remove("open"); });
+      document.body.appendChild(stLb);
+    }
+    stLb.querySelector("img").src = url;
+    stLb.querySelector(".cap").textContent = caption || "";
+    stLb.classList.add("open");
+  }
   function openLightbox(url, title, sub) {
     $("gk-lb-img").style.backgroundImage = url ? ('url("' + url + '")') : "";
     $("gk-lb-title").textContent = title || (cur && cur.title) || "";
