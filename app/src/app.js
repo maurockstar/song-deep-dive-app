@@ -160,15 +160,32 @@
           var img = null;
           for (var i = 0; i < items.length; i++) { if (items[i] && (items[i].thumb || items[i].url)) { img = items[i]; break; } }
           if (!img) return;
-          var bodyEl = panel.querySelector(".st-body");
-          if (!bodyEl) return;
-          var blocks = bodyEl.querySelectorAll(".st-p, .st-quote");
-          if (blocks.length < 2) return;
-          var fig = document.createElement("figure");
-          fig.className = "st-media";
-          fig.innerHTML = '<div class="st-media-img" style="background-image:url(&quot;' + esc(img.thumb || img.url) + '&quot;)"></div><figcaption>' + esc(t.artist || "") + '</figcaption>';
-          var ref = blocks[1];
-          if (ref.nextSibling) ref.parentNode.insertBefore(fig, ref.nextSibling); else ref.parentNode.appendChild(fig);
+          var imgUrl = img.thumb || img.url;
+          if (!imgUrl) return;
+          // Render as a real <img> (iOS Safari fails to paint large CSS background-images),
+          // and only insert the figure once it actually loads — so no empty box on any browser.
+          var im = new Image();
+          im.className = "st-media-img";
+          im.loading = "lazy"; im.decoding = "async";
+          im.alt = t.artist || "";
+          im.onload = function () {
+            if (seq !== storyMediaSeq || curTab !== "cards") return;
+            if (panel.querySelector(".st-media")) return;
+            var bodyEl = panel.querySelector(".st-body");
+            if (!bodyEl) return;
+            var blocks = bodyEl.querySelectorAll(".st-p, .st-quote");
+            if (blocks.length < 2) return;
+            var fig = document.createElement("figure");
+            fig.className = "st-media";
+            fig.appendChild(im);
+            var cap = document.createElement("figcaption");
+            cap.textContent = t.artist || "";
+            fig.appendChild(cap);
+            var ref = blocks[1];
+            if (ref.nextSibling) ref.parentNode.insertBefore(fig, ref.nextSibling); else ref.parentNode.appendChild(fig);
+          };
+          im.onerror = function () {};
+          im.src = imgUrl;
         })
         .catch(function () {});
     } catch (e) {}
