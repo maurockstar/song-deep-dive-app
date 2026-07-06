@@ -39,6 +39,13 @@
     $("gk-playbtn").innerHTML = svg;
     var lb = $("gk-lb-play"); if (lb) lb.innerHTML = svg; // keep the full-screen cover's play/pause in sync
   }
+  // Reflect Spotify's real shuffle/repeat state on the transport + full-screen buttons.
+  function setModeButtons(shuffleOn, repeatState) {
+    var son = !!shuffleOn;
+    var ron = !!(repeatState && repeatState !== "off");
+    ["gk-shuffle", "gk-lb-shuffle"].forEach(function (id) { var el = $(id); if (el) el.classList.toggle("on", son); });
+    ["gk-repeat", "gk-lb-repeat"].forEach(function (id) { var el = $(id); if (el) { el.classList.toggle("on", ron); el.classList.toggle("one", repeatState === "track"); } });
+  }
   function setProgress(progressMs, durationMs) {
     var pct = durationMs ? Math.min(100, progressMs / durationMs * 100) : 0;
     $("gk-fill").style.width = pct + "%";
@@ -589,6 +596,7 @@
   async function poll() {
     try {
       var track = await P.getActivePlayer().getCurrentTrack();
+      if (track) setModeButtons(track.shuffle, track.repeat); // reflect real shuffle/repeat every poll
       if (track && track.id && track.id !== lastPlayingId) {
         lastPlayingId = track.id; manualMode = false; cur = track;
         pstate = { progressMs: track.progressMs || 0, durationMs: track.durationMs || 0, playing: !!track.isPlaying, at: Date.now() };
@@ -714,12 +722,13 @@
       else if (action === "repeat") {
         var rr = CTRL.cycleRepeat ? await CTRL.cycleRepeat() : { ok: false };
         ok = rr.ok;
-        if (ok) { var ron = rr.state && rr.state !== "off"; $("gk-repeat") && $("gk-repeat").classList.toggle("on", ron); var lr = $("gk-lb-repeat"); lr && lr.classList.toggle("on", ron); }
+        if (ok) { var ron = !!(rr.state && rr.state !== "off"); ["gk-repeat", "gk-lb-repeat"].forEach(function (id) { var el = $(id); if (el) { el.classList.toggle("on", ron); el.classList.toggle("one", rr.state === "track"); } }); }
       }
     } catch (e) { ok = false; }
     // shuffle/repeat fail quietly (e.g. no active device); transport buttons surface the hint
     if (!ok && (action === "toggle" || action === "next" || action === "prev")) flashPmsg("Reconnect Spotify in ⚙ Setup to control playback (requires Spotify Premium).");
-    if (action === "toggle" || action === "next" || action === "prev") setTimeout(poll, 900);
+    // Re-poll shortly after any control to reconcile the buttons with Spotify's real state.
+    setTimeout(poll, 900);
   }
 
   // ---------- init ----------

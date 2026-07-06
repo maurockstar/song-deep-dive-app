@@ -89,6 +89,8 @@
   .t-btn-muted{background:none;border:none;color:var(--dim);cursor:pointer;padding:4px;display:inline-flex;transition:color .15s}
   .t-btn-muted:hover{color:var(--muted)}
   .t-btn-muted.on{color:var(--sun)}
+  #gk-repeat,#gk-lb-repeat{position:relative}
+  #gk-repeat.one::after,#gk-lb-repeat.one::after{content:"1";position:absolute;top:-3px;right:-3px;font-size:9px;font-weight:800;line-height:1;color:var(--sun)}
   .play-btn{width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(180deg,var(--sun-300),var(--sun-500));box-shadow:0 0 22px -6px rgba(var(--glow),.6);display:inline-flex;align-items:center;justify-content:center}
   .pmsg{text-align:center;color:var(--sun);font-size:13px;line-height:1.4;margin-top:0;min-height:0;opacity:0;transition:opacity .2s}
   .pmsg.show{opacity:1;margin-top:8px}

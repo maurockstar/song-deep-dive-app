@@ -106,12 +106,16 @@
     async getCurrentTrack() {
       var token = await getAccessToken();
       if (!token) return null;
-      var res = await fetch(API + "/me/player/currently-playing", { headers: { Authorization: "Bearer " + token } });
-      if (res.status === 204 || res.status === 202) return null; // nothing playing
-      if (!res.ok) { console.warn("currently-playing", res.status); return null; }
+      // /me/player (not /currently-playing) so we also get shuffle_state + repeat_state to mirror in the UI.
+      var res = await fetch(API + "/me/player", { headers: { Authorization: "Bearer " + token } });
+      if (res.status === 204 || res.status === 202) return null; // no active device
+      if (!res.ok) { console.warn("player", res.status); return null; }
       var d = await res.json();
       if (!d || !d.item) return null;
       var it = d.item;
+      // Keep the local shuffle/repeat mirrors honest so the next in-app toggle/cycle starts from reality.
+      shuffleOn = !!d.shuffle_state;
+      var ri = repeatModes.indexOf(d.repeat_state); if (ri >= 0) repeatIdx = ri;
       return {
         id: it.id,
         title: it.name,
@@ -121,6 +125,8 @@
         isPlaying: !!d.is_playing,
         progressMs: d.progress_ms || 0,
         durationMs: it.duration_ms || 0,
+        shuffle: !!d.shuffle_state,
+        repeat: d.repeat_state || "off",
         source: "spotify"
       };
     }
