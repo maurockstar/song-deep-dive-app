@@ -6,6 +6,7 @@
 
 const ITUNES = "https://itunes.apple.com/search";
 const WIKI = "https://en.wikipedia.org/api/rest_v1/page/summary/";
+const DEEZER = "https://api.deezer.com/search/artist?limit=1&q=";
 
 const cache = new Map();
 const CACHE_MAX = 300;
@@ -52,6 +53,22 @@ async function songCover(title, artist) {
   return { type: "album", url: hi(r.artworkUrl100, 1400), thumb: hi(r.artworkUrl100, 200), title: r.collectionName || title };
 }
 
+// High-res band/artist photo from Deezer (picture_xl = 1000x1000, no API key). Preferred lead image.
+async function deezerPhoto(artist) {
+  if (!artist) return null;
+  const d = await jget(DEEZER + encodeURIComponent(artist), {});
+  const a = d && d.data && d.data[0];
+  if (!a || !a.picture_xl) return null;
+  if (a.picture_xl.indexOf("/artist//") > -1) return null; // Deezer placeholder (artist has no photo)
+  return {
+    type: "photo",
+    url: a.picture_xl,
+    thumb: a.picture_medium || a.picture_big || a.picture_xl,
+    title: a.name || artist,
+    w: 1000, h: 1000
+  };
+}
+
 async function artistPhoto(artist) {
   if (!artist) return null;
   const cands = [artist, artist + " (band)", artist + " (musician)", artist + " (singer)"];
@@ -81,9 +98,10 @@ module.exports = async function (context, req) {
   const key = (artist + "|" + title).toLowerCase().replace(/\s+/g, "_");
   if (cache.has(key)) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: cache.get(key) }; return; }
 
-  const [photo, cover, albs] = await Promise.all([artistPhoto(artist), songCover(title, artist), albums(artist)]);
+  const [dzPhoto, wikiPhoto, cover, albs] = await Promise.all([deezerPhoto(artist), artistPhoto(artist), songCover(title, artist), albums(artist)]);
 
   const items = [];
+  const photo = dzPhoto || wikiPhoto;   // prefer the hi-res Deezer band photo; fall back to Wikipedia
   if (photo) items.push(photo);
   if (cover) items.push(cover);
   for (const a of albs) {
