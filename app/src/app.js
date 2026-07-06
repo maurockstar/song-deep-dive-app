@@ -753,7 +753,7 @@
       var op = e.target.closest(".tq-opt"); if (op) { answerQuestion(+op.getAttribute("data-i")); return; }
       var nx = e.target.closest(".tq-next"); if (nx) { if (TQ.i >= TQ.list.length - 1) triviaResults(); else { TQ.i++; renderQuestion(); } return; }
       var ag = e.target.closest(".tv-again"); if (ag) { resetTrivia(); renderTrivia("mode"); return; }
-      var mt = e.target.closest(".mtile"); if (mt) { openLightbox(mt.getAttribute("data-full"), mt.getAttribute("data-cap"), cur && cur.artist); return; }
+      var mt = e.target.closest(".mtile"); if (mt) { openStoryPhoto(mt.getAttribute("data-full"), mt.getAttribute("data-cap")); return; } // plain image viewer — no playback, not overwritten by the poll
       var dd = e.target.closest("#ff-deeper"); if (dd) { diveDeeper(); return; }
       var sz = e.target.closest("#gk-shz-btn"); if (sz) { shazamDemo(); return; }
     });
