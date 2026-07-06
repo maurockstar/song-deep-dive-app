@@ -207,6 +207,19 @@
         .catch(function () {});
     } catch (e) {}
   }
+  // Self-healing: the live player can change tracks mid-flight and cancel an in-flight
+  // enrichment. Retry a few times while the SAME track stays displayed until pictures land.
+  function enrichStoryRetry(payload, tries) {
+    enrichStoryMedia(payload);
+    if (tries > 0) {
+      var myKey = trackKey((payload && payload.track) || cur);
+      setTimeout(function () {
+        if (curTab === "cards" && trackKey(cur) === myKey && !panel.querySelector(".st-media")) {
+          enrichStoryRetry(payload, tries - 1);
+        }
+      }, 1400);
+    }
+  }
   function renderStory(payload) {
     var story = deriveStory(payload);
     if (!story) { notePanel("No deep dive for this one yet — try another song."); return; }
@@ -223,7 +236,7 @@
       + (meta ? '<div class="st-meta">' + meta + '</div>' : '')
       + '<div class="st-body">' + storyBlocksHtml(story.body) + '</div>'
       + '</article>';
-    enrichStoryMedia(payload);
+    enrichStoryRetry(payload, 5);
   }
   function renderCards(payload) { renderStory(payload); }
   async function loadDeepDive(track) {
