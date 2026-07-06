@@ -144,18 +144,20 @@
     }
     return { headline: (cards[0] && cards[0].title) || ((cur && cur.title) || "The story"), dek: (cards[0] && cards[0].body) || "", body: body };
   }
-  var storyMediaSeq = 0;
+  var curStoryKey = "";
   function nrmTxt(x) { return (x || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+  function trackKey(t) { return t ? (nrmTxt(t.artist || "") + "|" + nrmTxt(t.title || "")) : ""; }
   function enrichStoryMedia(payload) {
     // Show up to 3 distinct, HIGH-RES, clickable pictures per story — and never the album cover.
-    var seq = ++storyMediaSeq;
     var t = (payload && payload.track) || cur;
     if (!t || !t.artist) return;
+    var key = trackKey(t);
+    curStoryKey = key;
     try {
       fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "" }).toString())
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
-          if (seq !== storyMediaSeq || curTab !== "cards") return;
+          if (key !== curStoryKey || curTab !== "cards") return;
           var items = (d && d.items) || [];
           var curAlbum = nrmTxt((cur && cur.album) || "");
           var curArt = (cur && cur.art) || "";
@@ -181,14 +183,17 @@
             el.addEventListener("click", function () { openStoryPhoto(mm.url, mm.cap || ""); });
             el.onerror = function () {};
             el.onload = function () {
-              if (seq !== storyMediaSeq || curTab !== "cards") return;
+              if (key !== curStoryKey || curTab !== "cards") return;
+              // de-dupe: if this exact image is already placed (e.g. a racing enrichment), skip.
+              var already = panel.querySelectorAll("img.st-media-img");
+              for (var z = 0; z < already.length; z++) { if (already[z] !== el && already[z].src === el.src) return; }
               var fig = document.createElement("figure");
               fig.className = "st-media";
               fig.appendChild(el);
               var cap = document.createElement("figcaption");
               cap.textContent = mm.cap || "";
               fig.appendChild(cap);
-              if (idx === 0) { var lead = panel.querySelector("#st-lead"); if (lead) { lead.appendChild(fig); return; } }
+              if (idx === 0) { var lead = panel.querySelector("#st-lead"); if (lead) { if (lead.querySelector(".st-media")) return; lead.appendChild(fig); return; } }
               var bodyEl = panel.querySelector(".st-body");
               if (!bodyEl) return;
               var blocks = bodyEl.querySelectorAll(".st-p, .st-quote");
