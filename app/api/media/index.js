@@ -70,10 +70,16 @@ async function deezerPhoto(artist) {
   };
 }
 
-// Rebuild a Wikimedia thumb URL at a chosen width (capped at the original) — crisp without pulling the multi-MB original.
-function wikiSized(thumbUrl, origUrl, width) {
-  if (thumbUrl && /\/\d+px-[^/]+$/.test(thumbUrl)) return thumbUrl.replace(/\/\d+px-([^/]+)$/, "/" + width + "px-$1");
-  return origUrl || thumbUrl || "";
+// Build a reliably-sized Wikimedia image URL via Special:FilePath (the /thumb/NNNpx- URLs 404 when hotlinked).
+function wikiImg(origUrl, width) {
+  if (!origUrl) return "";
+  try {
+    const mWiki = origUrl.match(/\/wikipedia\/([a-z]+)\//);
+    const wiki = (mWiki && mWiki[1]) || "commons";
+    const host = wiki === "commons" ? "commons.wikimedia.org" : (wiki + ".wikipedia.org");
+    const file = origUrl.split("/").pop().split("?")[0];   // already URL-encoded in the source
+    return "https://" + host + "/wiki/Special:FilePath/" + file + "?width=" + width;
+  } catch (e) { return origUrl; }
 }
 // Wikipedia/Commons infobox photo — encyclopedic, so it's a REAL band/artist photo (not a label logo).
 async function artistPhoto(artist) {
@@ -83,11 +89,10 @@ async function artistPhoto(artist) {
     const s = await jget(WIKI + encodeURIComponent(c), {});
     if (s && s.type !== "disambiguation" && s.originalimage && s.originalimage.source) {
       const orig = s.originalimage.source;
-      const th = (s.thumbnail && s.thumbnail.source) || orig;
       return {
         type: "photo",
-        url: wikiSized(th, orig, 1400),   // crisp lead + fullscreen, sane bandwidth
-        thumb: wikiSized(th, orig, 400),
+        url: wikiImg(orig, 1400),   // crisp lead + fullscreen, sane bandwidth
+        thumb: wikiImg(orig, 400),
         title: artist,
         w: s.originalimage.width || 0,    // original width — used to prefer hi-res encyclopedic photos & gate tiny ones
         h: s.originalimage.height || 0,
