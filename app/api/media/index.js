@@ -7,9 +7,20 @@
 const ITUNES = "https://itunes.apple.com/search";
 const WIKI = "https://en.wikipedia.org/api/rest_v1/page/summary/";
 const DEEZER = "https://api.deezer.com/search/artist?limit=1&q=";
+const COMMONS = "https://commons.wikimedia.org/w/api.php";
 
 const cache = new Map();
 const CACHE_MAX = 300;
+
+function nrm(x) { return (x || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+// Collapse album editions: "King Animal (Deluxe Version)" == "King Animal"; "Superunknown (20th Anniversary)" == "Superunknown (Deluxe Edition)".
+function baseAlbumKey(x) {
+  return (x || "").toLowerCase()
+    .replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ")
+    .replace(/\b(remaster(ed)?|deluxe|expanded|extended|edition|version|anniversary|mono|stereo|explicit|clean|bonus|reissue|reissued|single|ep|live|ost|soundtrack|special|collector'?s?|super)\b/g, " ")
+    .replace(/\b(19|20)\d{2}\b/g, " ")
+    .replace(/[^a-z0-9]+/g, "");
+}
 
 async function jget(url, headers, ms) {
   const ctrl = new AbortController();
@@ -35,11 +46,47 @@ async function albums(artist) {
   const seen = {}, out = [];
   for (const r of results) {
     if (!r.artworkUrl100 || !r.collectionName) continue;
-    const key = (r.collectionName || "").toLowerCase();
-    if (seen[key]) continue;
+    const key = baseAlbumKey(r.collectionName);   // fuzzy: one cover per album, ignoring edition/remaster/year
+    if (!key || seen[key]) continue;
     seen[key] = 1;
     out.push({ type: "album", url: hi(r.artworkUrl100, 1400), thumb: hi(r.artworkUrl100, 200), title: r.collectionName });
     if (out.length >= 8) break;
+  }
+  return out;
+}
+
+// Real band/concert/candid photos from Wikimedia Commons (free, no key). Great for variety beyond album art.
+function commonsFilePath(file, width) {
+  return "https://commons.wikimedia.org/wiki/Special:FilePath/" + encodeURIComponent(file) + "?width=" + width;
+}
+async function commonsPhotos(artist, max) {
+  if (!artist) return [];
+  const url = COMMONS + "?action=query&generator=search&gsrsearch=" + encodeURIComponent(artist) +
+    "&gsrnamespace=6&gsrlimit=30&prop=imageinfo&iiprop=url|size|mime&format=json&origin=*";
+  const j = await jget(url, {});
+  const pages = (j && j.query && j.query.pages) ? Object.values(j.query.pages) : [];
+  const bad = /(logo|cover|album|poster|single|tracklist|setlist|ticket|autograph|signature|font|typeface|wordmark|vinyl|cd|cassette|artwork|sticker|flyer|map|diagram)/i;
+  const artKey = nrm(artist);
+  const seen = {}, out = [];
+  for (const p of pages) {
+    const ii = (p.imageinfo && p.imageinfo[0]) || null;
+    if (!ii || !/jpe?g/i.test(ii.mime || "")) continue;            // photos only (logos are png/svg)
+    if (!(ii.width >= 600 && ii.height >= 400)) continue;          // decent resolution
+    const file = (p.title || "").replace(/^File:/, "");
+    if (bad.test(file)) continue;                                  // skip logos/covers/merch
+    if (nrm(file).indexOf(artKey) === -1) continue;                // must actually be about this artist
+    const key = nrm(file);
+    if (seen[key]) continue; seen[key] = 1;
+    const cap = file.replace(/\.[a-z0-9]+$/i, "").replace(/_/g, " ").replace(/\s*@\s*/g, " at ").replace(/\(\s*[\d ]+\s*\)/g, "").replace(/\s+/g, " ").trim();
+    out.push({
+      type: "photo",
+      url: commonsFilePath(file, 1200),
+      thumb: commonsFilePath(file, 400),
+      title: cap.slice(0, 60) || artist,
+      w: ii.width, h: ii.height,
+      src: "commons"
+    });
+    if (out.length >= (max || 6)) break;
   }
   return out;
 }
@@ -113,20 +160,30 @@ module.exports = async function (context, req) {
   const key = (artist + "|" + title).toLowerCase().replace(/\s+/g, "_");
   if (cache.has(key)) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: cache.get(key) }; return; }
 
-  const [dzPhoto, wikiPhoto, cover, albs] = await Promise.all([deezerPhoto(artist), artistPhoto(artist), songCover(title, artist), albums(artist)]);
+  const [dzPhoto, wikiPhoto, commons, cover, albs] = await Promise.all([
+    deezerPhoto(artist), artistPhoto(artist), commonsPhotos(artist, 8), songCover(title, artist), albums(artist)
+  ]);
 
   const items = [];
-  // A hi-res Wikipedia/Commons photo is a REAL band photo (never a logo) -> prefer it.
-  // Otherwise use Deezer (usually a real photo, occasionally a logo), then a low-res Wikipedia as last resort.
-  const photo = (wikiPhoto && wikiPhoto.w >= 600) ? wikiPhoto : (dzPhoto || wikiPhoto);
-  if (photo) items.push(photo);
-  if (cover) items.push(cover);
+  const seenUrl = {};
+  function add(it) { if (!it) return; var k = nrm(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; items.push(it); }
+
+  // 1) Lead band photo — prefer a hi-res Wikipedia/Commons photo (real, never a logo), else Deezer.
+  const lead = (wikiPhoto && wikiPhoto.w >= 600) ? wikiPhoto : (dzPhoto || wikiPhoto);
+  add(lead);
+  // 2) Real band/concert/candid photos from Commons — variety beyond album art.
+  commons.forEach(add);
+  // 3) A Deezer band photo too, if we didn't already lead with it and it's distinct.
+  if (dzPhoto && lead !== dzPhoto) add(dzPhoto);
+  // 4) Album art — the now-playing cover, then other albums (fuzzy-deduped, current album excluded).
+  add(cover);
+  const coverKey = cover ? baseAlbumKey(cover.title) : "";
   for (const a of albs) {
-    if (cover && a.title && cover.title && a.title.toLowerCase() === cover.title.toLowerCase()) continue;
-    items.push(a);
+    if (coverKey && baseAlbumKey(a.title) === coverKey) continue;
+    add(a);
   }
 
-  const payload = { artist, title, items, _meta: { source: "itunes+wikipedia", generatedAt: new Date().toISOString() } };
+  const payload = { artist, title, items, _meta: { source: "itunes+wikipedia+commons", generatedAt: new Date().toISOString() } };
   if (items.length) { if (cache.size > CACHE_MAX) cache.clear(); cache.set(key, payload); }
   context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: payload };
 };
