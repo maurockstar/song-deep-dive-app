@@ -37,7 +37,7 @@ async function albums(artist) {
     const key = (r.collectionName || "").toLowerCase();
     if (seen[key]) continue;
     seen[key] = 1;
-    out.push({ type: "album", url: hi(r.artworkUrl100, 600), thumb: hi(r.artworkUrl100, 200), title: r.collectionName });
+    out.push({ type: "album", url: hi(r.artworkUrl100, 1200), thumb: hi(r.artworkUrl100, 200), title: r.collectionName });
     if (out.length >= 8) break;
   }
   return out;
@@ -49,7 +49,7 @@ async function songCover(title, artist) {
   const d = await jget(url, {});
   const r = (d && d.results && d.results[0]) || null;
   if (!r || !r.artworkUrl100) return null;
-  return { type: "album", url: hi(r.artworkUrl100, 600), thumb: hi(r.artworkUrl100, 200), title: r.collectionName || title };
+  return { type: "album", url: hi(r.artworkUrl100, 1200), thumb: hi(r.artworkUrl100, 200), title: r.collectionName || title };
 }
 
 async function artistPhoto(artist) {

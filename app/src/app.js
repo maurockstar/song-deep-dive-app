@@ -90,7 +90,6 @@
   }
   function skeletonCards() {
     panel.innerHTML = '<article class="st-read">'
-      + '<div class="st-hero st-hero-ph skeleton"></div>'
       + '<div class="st-kicker">The story</div>'
       + '<div class="st-headline skeleton" style="height:26px;max-width:80%;border-radius:8px">&nbsp;</div>'
       + '<div class="st-body"><p class="st-p skeleton">Reading the room and gathering the story…</p>'
@@ -146,8 +145,9 @@
     return { headline: (cards[0] && cards[0].title) || ((cur && cur.title) || "The story"), dek: (cards[0] && cards[0].body) || "", body: body };
   }
   var storyMediaSeq = 0;
+  function nrmTxt(x) { return (x || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
   function enrichStoryMedia(payload) {
-    // "rich when available": slot a real artist photo mid-story if the media API returns one.
+    // Show up to 3 distinct, HIGH-RES, clickable pictures per story — and never the album cover.
     var seq = ++storyMediaSeq;
     var t = (payload && payload.track) || cur;
     if (!t || !t.artist) return;
@@ -157,37 +157,47 @@
         .then(function (d) {
           if (seq !== storyMediaSeq || curTab !== "cards") return;
           var items = (d && d.items) || [];
-          var img = null;
-          for (var i = 0; i < items.length; i++) { if (items[i] && (items[i].thumb || items[i].url)) { img = items[i]; break; } }
-          if (!img) return;
-          var imgUrl = img.url || img.thumb; // high-res first
-          if (!imgUrl) return;
-          // Render as a real <img> (iOS Safari fails to paint large CSS background-images),
-          // and only insert the figure once it actually loads — so no empty box on any browser.
-          var im = new Image();
-          im.className = "st-media-img";
-          im.loading = "lazy"; im.decoding = "async";
-          im.alt = t.artist || "";
-          im.style.cursor = "zoom-in";
-          im.addEventListener("click", function () { openStoryPhoto(imgUrl, t.artist || ""); });
-          im.onload = function () {
-            if (seq !== storyMediaSeq || curTab !== "cards") return;
-            if (panel.querySelector(".st-media")) return;
-            var bodyEl = panel.querySelector(".st-body");
-            if (!bodyEl) return;
-            var blocks = bodyEl.querySelectorAll(".st-p, .st-quote");
-            if (blocks.length < 2) return;
-            var fig = document.createElement("figure");
-            fig.className = "st-media";
-            fig.appendChild(im);
-            var cap = document.createElement("figcaption");
-            cap.textContent = t.artist || "";
-            fig.appendChild(cap);
-            var ref = blocks[1];
-            if (ref.nextSibling) ref.parentNode.insertBefore(fig, ref.nextSibling); else ref.parentNode.appendChild(fig);
-          };
-          im.onerror = function () {};
-          im.src = imgUrl;
+          var curAlbum = nrmTxt((cur && cur.album) || "");
+          var curArt = (cur && cur.art) || "";
+          var seen = {}, imgs = [];
+          function add(it) {
+            if (!it) return;
+            var url = it.url || it.thumb; if (!url) return;
+            if (seen[url]) return;
+            if (curArt && url === curArt) return;                                       // exact same file as the album cover
+            if (it.type === "album" && curAlbum && nrmTxt(it.title || "") === curAlbum) return; // the current album's cover
+            seen[url] = 1;
+            imgs.push({ url: url, cap: it.title || t.artist || "" });
+          }
+          items.forEach(function (it) { if (it && it.type === "photo") add(it); }); // artist photos first (never a cover)
+          items.forEach(function (it) { if (it && it.type !== "photo") add(it); }); // then other album covers
+          imgs = imgs.slice(0, 3);
+          if (!imgs.length) return;
+          imgs.forEach(function (mm, idx) {
+            var el = new Image();
+            el.className = "st-media-img";
+            el.loading = "lazy"; el.decoding = "async"; el.alt = mm.cap || "";
+            el.style.cursor = "zoom-in";
+            el.addEventListener("click", function () { openStoryPhoto(mm.url, mm.cap || ""); });
+            el.onerror = function () {};
+            el.onload = function () {
+              if (seq !== storyMediaSeq || curTab !== "cards") return;
+              var fig = document.createElement("figure");
+              fig.className = "st-media";
+              fig.appendChild(el);
+              var cap = document.createElement("figcaption");
+              cap.textContent = mm.cap || "";
+              fig.appendChild(cap);
+              if (idx === 0) { var lead = panel.querySelector("#st-lead"); if (lead) { lead.appendChild(fig); return; } }
+              var bodyEl = panel.querySelector(".st-body");
+              if (!bodyEl) return;
+              var blocks = bodyEl.querySelectorAll(".st-p, .st-quote");
+              var afterIdx = (idx === 1) ? 1 : 3;
+              if (blocks.length > afterIdx) { var ref = blocks[afterIdx]; if (ref.nextSibling) ref.parentNode.insertBefore(fig, ref.nextSibling); else ref.parentNode.appendChild(fig); }
+              else { bodyEl.appendChild(fig); }
+            };
+            el.src = mm.url;
+          });
         })
         .catch(function () {});
     } catch (e) {}
@@ -195,25 +205,19 @@
   function renderStory(payload) {
     var story = deriveStory(payload);
     if (!story) { notePanel("No deep dive for this one yet — try another song."); return; }
-    var art = (cur && cur.art) ? esc(cur.art) : "";
-    var hero = art
-      ? '<div class="st-hero" style="background-image:url(&quot;' + art + '&quot;)"></div>'
-      : '<div class="st-hero st-hero-ph"></div>';
     var metaParts = [];
     if (cur && cur.artist) metaParts.push(cur.artist);
     if (cur && cur.album) metaParts.push(cur.album);
     if (payload && payload._meta && payload._meta.year) metaParts.push(payload._meta.year);
-    var meta = esc(metaParts.join(" · "));
+    var meta = esc(metaParts.join(" \u00b7 "));
     panel.innerHTML = '<article class="st-read">'
-      + hero
+      + '<div class="st-lead" id="st-lead"></div>'
       + '<div class="st-kicker">The story</div>'
       + '<h2 class="st-headline">' + esc(story.headline || "") + '</h2>'
       + (story.dek ? '<p class="st-dek">' + esc(story.dek) + '</p>' : '')
       + (meta ? '<div class="st-meta">' + meta + '</div>' : '')
       + '<div class="st-body">' + storyBlocksHtml(story.body) + '</div>'
       + '</article>';
-    var heroEl = panel.querySelector(".st-hero");
-    if (heroEl && cur && cur.art) { heroEl.style.cursor = "zoom-in"; heroEl.addEventListener("click", function () { openStoryPhoto(cur.art, cur.title || cur.artist || ""); }); }
     enrichStoryMedia(payload);
   }
   function renderCards(payload) { renderStory(payload); }
