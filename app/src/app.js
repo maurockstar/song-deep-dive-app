@@ -121,12 +121,18 @@
     renderFunFact();
   }
   // ---------- deep dive: editorial STORY long-read (ports the prototype's Story) ----------
-  function storyBlocksHtml(blocks) {
+  function storyBlocksHtml(blocks, seedTexts) {
     var h = "";
     var arr = blocks || [];
+    var seen = {};
+    // Seed with already-shown text (headline/dek) so a body block that repeats them is dropped.
+    (seedTexts || []).forEach(function (s) { var k = nrmTxt(s); if (k) seen[k] = 1; });
     for (var i = 0; i < arr.length; i++) {
       var b = arr[i];
       if (!b || !b.text) continue;
+      var k = nrmTxt(b.text);
+      if (!k || seen[k]) continue;   // skip empty or duplicate paragraphs/quotes
+      seen[k] = 1;
       if (b.type === "quote") h += '<blockquote class="st-quote">' + esc(b.text) + '</blockquote>';
       else h += '<p class="st-p">' + esc(b.text) + '</p>';
     }
@@ -147,6 +153,21 @@
   var curStoryKey = "";
   function nrmTxt(x) { return (x || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
   function trackKey(t) { return t ? (nrmTxt(t.artist || "") + "|" + nrmTxt(t.title || "")) : ""; }
+  // Album title reduced to a stable base so "Rain Tree Crow (Remastered 2019)" == "Rain Tree Crow".
+  function baseAlbum(x) {
+    return (x || "").toLowerCase()
+      .replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ")   // (remastered 2019) / [deluxe]
+      .replace(/\b(remaster(ed)?|deluxe|expanded|extended|edition|version|anniversary|mono|stereo|explicit|clean|bonus|reissue|single|ep|live|ost|soundtrack)\b/g, " ")
+      .replace(/\b(19|20)\d{2}\b/g, " ")                        // stray years
+      .replace(/[^a-z0-9]+/g, "");
+  }
+  // True when an iTunes album title is (fuzzily) the now-playing album — so we never show its cover.
+  function isCurrentAlbum(title) {
+    var a = baseAlbum(title), b = baseAlbum((cur && cur.album) || "");
+    if (!a || !b) return false;
+    if (a === b) return true;
+    return a.length >= 4 && b.length >= 4 && (a.indexOf(b) > -1 || b.indexOf(a) > -1);
+  }
   function enrichStoryMedia(payload) {
     // Show up to 3 distinct, HIGH-RES, clickable pictures per story — and never the album cover.
     var t = (payload && payload.track) || cur;
@@ -159,16 +180,18 @@
         .then(function (d) {
           if (key !== curStoryKey || curTab !== "cards") return;
           var items = (d && d.items) || [];
-          var curAlbum = nrmTxt((cur && cur.album) || "");
           var curArt = (cur && cur.art) || "";
+          function artBase(u) { return (u || "").replace(/\/[0-9]+x[0-9]+[^\/]*$/, ""); } // ignore iTunes size suffix
+          var curArtBase = artBase(curArt);
           var seen = {}, imgs = [];
           function add(it) {
             if (!it) return;
             var url = it.url || it.thumb; if (!url) return;
-            if (seen[url]) return;
-            if (curArt && url === curArt) return;                                       // exact same file as the album cover
-            if (it.type === "album" && curAlbum && nrmTxt(it.title || "") === curAlbum) return; // the current album's cover
-            seen[url] = 1;
+            var base = artBase(url);
+            if (seen[base]) return;                                                      // same image at any size
+            if (curArt && (url === curArt || base === curArtBase)) return;               // exact same file as the now-playing cover
+            if (it.type === "album" && isCurrentAlbum(it.title)) return;                 // the current album's cover (fuzzy: ignores remaster/year suffixes)
+            seen[base] = 1;
             imgs.push({ url: url, cap: it.title || t.artist || "" });
           }
           items.forEach(function (it) { if (it && it.type === "photo") add(it); }); // artist photos first (never a cover)
@@ -234,7 +257,7 @@
       + '<h2 class="st-headline">' + esc(story.headline || "") + '</h2>'
       + (story.dek ? '<p class="st-dek">' + esc(story.dek) + '</p>' : '')
       + (meta ? '<div class="st-meta">' + meta + '</div>' : '')
-      + '<div class="st-body">' + storyBlocksHtml(story.body) + '</div>'
+      + '<div class="st-body">' + storyBlocksHtml(story.body, [story.headline, story.dek]) + '</div>'
       + '</article>';
     enrichStoryRetry(payload, 5);
   }
