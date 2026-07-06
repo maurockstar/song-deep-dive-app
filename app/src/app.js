@@ -178,7 +178,7 @@
           imgs.forEach(function (mm, idx) {
             var el = new Image();
             el.className = "st-media-img";
-            el.loading = "lazy"; el.decoding = "async"; el.alt = mm.cap || "";
+            el.decoding = "async"; el.alt = mm.cap || "";  // NOTE: never set loading="lazy" here — the img is only inserted inside onload, so a lazy (detached) image would never load and never fire onload (deadlock).
             el.style.cursor = "zoom-in";
             el.addEventListener("click", function () { openStoryPhoto(mm.url, mm.cap || ""); });
             el.onerror = function () {};
