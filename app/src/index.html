@@ -68,30 +68,30 @@
   .btn-copy{flex:none;border:1px solid var(--border2);background:var(--card);color:var(--ink);border-radius:10px;padding:0 16px;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px}
 
   /* hero */
-  .hero{border-bottom:1px solid var(--border);padding-bottom:20px}
+  .hero{border-bottom:1px solid var(--border);padding-bottom:10px}
   .np{display:flex;flex-direction:column;align-items:center;text-align:center}
   .np-cover{padding:4px;border:none;border-radius:20px;background:linear-gradient(160deg,var(--gold),var(--sun-500) 55%,var(--deep));box-shadow:0 8px 22px -10px rgba(var(--glow),.55);cursor:pointer;position:relative;display:inline-block}
   .np-img{width:104px;height:104px;border-radius:15px;border:2px solid var(--bg);box-sizing:border-box;background:linear-gradient(180deg,var(--gold),var(--sun-500)) center/cover no-repeat}
   .np-expand{position:absolute;right:8px;bottom:8px;width:24px;height:24px;border-radius:7px;background:rgba(8,4,2,.55);display:flex;align-items:center;justify-content:center}
-  .np-title{font-family:var(--round);font-weight:600;font-size:30px;line-height:1.05;color:var(--ink-hi);margin-top:14px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .np-title{font-family:var(--round);font-weight:600;font-size:30px;line-height:1.05;color:var(--ink-hi);margin-top:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .np-artist{color:var(--ink);font-weight:600;font-size:16px;margin-top:3px}
 
   /* player */
-  .player{margin-top:20px}
+  .player{margin-top:16px}
   .bar-row{display:flex;align-items:center;gap:12px}
   .time{font-family:var(--label);font-weight:600;font-size:12px;color:var(--ink);min-width:34px}
   .track{flex:1;height:5px;border-radius:3px;background:var(--border);position:relative}
   .fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:3px;background:linear-gradient(90deg,var(--gold),var(--sun-500))}
   .handle{position:absolute;left:0;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;border-radius:50%;background:var(--sun-300);box-shadow:0 0 8px -1px rgba(var(--glow2),.7)}
-  .transport{display:flex;align-items:center;justify-content:center;gap:22px;margin-top:14px}
+  .transport{display:flex;align-items:center;justify-content:center;gap:22px;margin-top:12px}
   .t-btn{background:none;border:none;color:var(--sun);cursor:pointer;padding:4px;display:inline-flex;transition:color .15s}
   .t-btn:hover{color:var(--hover)}
   .t-btn-muted{background:none;border:none;color:var(--dim);cursor:pointer;padding:4px;display:inline-flex;transition:color .15s}
   .t-btn-muted:hover{color:var(--muted)}
   .t-btn-muted.on{color:var(--sun)}
   .play-btn{width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(180deg,var(--sun-300),var(--sun-500));box-shadow:0 0 22px -6px rgba(var(--glow),.6);display:inline-flex;align-items:center;justify-content:center}
-  .pmsg{text-align:center;color:var(--sun);font-size:13px;line-height:1.4;margin-top:10px;min-height:1em;opacity:0;transition:opacity .2s}
-  .pmsg.show{opacity:1}
+  .pmsg{text-align:center;color:var(--sun);font-size:13px;line-height:1.4;margin-top:0;min-height:0;opacity:0;transition:opacity .2s}
+  .pmsg.show{opacity:1;margin-top:8px}
 
   /* tabs — desktop row */
   .tabs{display:flex;justify-content:center;gap:10px;margin-top:22px}
@@ -99,8 +99,8 @@
   .gk-tab.active{background:linear-gradient(180deg,var(--sun-300),var(--sun-500));border-color:transparent;color:var(--on-accent)}
   .tab-label{display:none}
 
-  .hint{font-family:var(--round);font-weight:600;color:var(--faded);font-size:16px;margin:16px 2px 14px;text-align:center;min-height:1.2em}
-  .surface{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:16px;padding:20px 22px;min-height:230px}
+  .hint{display:none}
+  .surface{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:16px;padding:14px 16px;min-height:230px}
 
   /* deep-dive cards */
   .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
