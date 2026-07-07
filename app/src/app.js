@@ -969,11 +969,20 @@
   // after which geeek controls it directly). Done synchronously from the tap so iOS doesn't block the launch.
   // Pausing, and everything on desktop, use the normal Web API transport.
   function playPause() {
-    if (onMobileDevice() && !playing && cur && cur.id && S.isConnected()) {
-      window.open("https://open.spotify.com/track/" + encodeURIComponent(cur.id), "_blank");
-      playing = true; setPlayIcon(true); pstate.playing = true; pstate.at = Date.now();
-      setTimeout(poll, 3000);
+    // On a phone, RESUME the user's real queue AT POSITION right inside geeek, using geeek's own in-browser
+    // Spotify player — no app switch, no restart, queue intact. (Premium + the "streaming" scope; reconnect once.)
+    if (!playing && onMobileDevice() && S.sdkAvailable && S.sdkAvailable()) {
+      var pr = S.playHere();                 // activateElement() fires within this tap (mobile autoplay policy)
+      playing = true; setPlayIcon(true); pstate.playing = true; pstate.at = Date.now();   // optimistic
+      pr.then(function (ok) {
+        if (ok) { setTimeout(poll, 1200); }
+        else { playing = false; setPlayIcon(false); pstate.playing = false; transport("toggle"); }
+      });
       return;
+    }
+    // Phone, connected, but the in-app player needs the new scope — nudge the user to reconnect once.
+    if (!playing && onMobileDevice() && S.isConnected() && S.sdkNeedsReconnect && S.sdkNeedsReconnect()) {
+      flashPmsg("Reconnect Spotify in ⚙ Setup to play right here in the app.");
     }
     transport("toggle");
   }
@@ -1061,6 +1070,7 @@
     // spotify
     S.handleRedirect().then(function (ok) {
       if (S.isConnected()) startPolling();
+      if (S.initSdkPlayer) S.initSdkPlayer();
       refreshSetup();
     });
 

@@ -310,6 +310,46 @@
   }
 
   window.SDD = window.SDD || {};
-  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl, queueTrack: queueTrack, resolveTrack: resolveTrack, queueUri: queueUri };
+  // ---------- Web Playback SDK: make geeek itself a Spotify player (this browser tab) ----------
+  // Lets us RESUME the user's real playback (their queue + the exact position) right here — no app switch,
+  // no restart — by transferring playback into this in-browser device. Premium only; needs the "streaming" scope.
+  var sdkPlayer = null, sdkDeviceId = null, sdkReady = false, sdkLoaded = false, sdkAuthFail = false, sdkNoPremium = false;
+  function initSdkPlayer() {
+    if (sdkPlayer || !sdkLoaded || !window.Spotify || !isConnected()) return;
+    try {
+      sdkPlayer = new window.Spotify.Player({
+        name: "geeek",
+        getOAuthToken: function (cb) { getAccessToken().then(function (t) { if (t) cb(t); }); },
+        volume: 0.9
+      });
+      sdkPlayer.addListener("ready", function (e) { sdkDeviceId = e.device_id; sdkReady = true; });
+      sdkPlayer.addListener("not_ready", function () { sdkReady = false; });
+      sdkPlayer.addListener("authentication_error", function () { sdkAuthFail = true; }); // token lacks "streaming" scope -> reconnect
+      sdkPlayer.addListener("account_error", function () { sdkNoPremium = true; });        // not Spotify Premium
+      sdkPlayer.addListener("initialization_error", function () {});
+      sdkPlayer.connect();
+    } catch (e) { sdkPlayer = null; }
+  }
+  window.onSpotifyWebPlaybackSDKReady = function () { sdkLoaded = true; initSdkPlayer(); };
+  function sdkAvailable() { return !!(sdkReady && sdkDeviceId); }
+  function sdkNeedsReconnect() { return sdkAuthFail && !sdkNoPremium; }
+  // Resume the user's CURRENT playback (queue + position) inside geeek's in-browser player. activateElement()
+  // must fire from the user's tap (mobile autoplay policy), so call this synchronously from the click handler.
+  async function playHere() {
+    if (!sdkAvailable()) return false;
+    try { if (sdkPlayer && sdkPlayer.activateElement) sdkPlayer.activateElement(); } catch (e) {}
+    var token = await getAccessToken();
+    if (!token) return false;
+    try {
+      var res = await fetch(API + "/me/player", {
+        method: "PUT",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ device_ids: [sdkDeviceId], play: true })
+      });
+      return res.ok || res.status === 204;
+    } catch (e) { return false; }
+  }
+
+  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl, queueTrack: queueTrack, resolveTrack: resolveTrack, queueUri: queueUri, sdkAvailable: sdkAvailable, playHere: playHere, sdkNeedsReconnect: sdkNeedsReconnect, initSdkPlayer: initSdkPlayer };
   window.SDD.player = { spotify: spotifyPlayer, setActivePlayer: setActivePlayer, getActivePlayer: getActivePlayer, control: playerControl };
 })();

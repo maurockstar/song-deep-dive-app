@@ -10,7 +10,7 @@ window.SDD_CONFIG = {
   REDIRECT_URI: window.location.origin + "/",
 
   // Scopes: read what you're listening to + control playback (play/pause/skip) from the player.
-  SCOPES: ["user-read-currently-playing", "user-read-playback-state", "user-modify-playback-state"],
+  SCOPES: ["user-read-currently-playing", "user-read-playback-state", "user-modify-playback-state", "streaming"],
 
   // How often (ms) to poll Spotify for the current track.
   POLL_MS: 4000,
