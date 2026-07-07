@@ -54,11 +54,13 @@ function baseAlbumKey(x) {
     .replace(/[^a-z0-9]+/g, "");
 }
 
+const HTTP_UA = "geeek/1.0 (https://geeek.fm; media)"; // Wikipedia/Commons require a descriptive UA
 async function jget(url, headers, ms) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms || 10000);
   try {
-    const r = await fetch(url, { headers: headers || {}, signal: ctrl.signal });
+    const h = Object.assign({ "User-Agent": HTTP_UA, "Accept": "application/json" }, headers || {});
+    const r = await fetch(url, { headers: h, signal: ctrl.signal });
     if (!r.ok) return null;
     return await r.json();
   } catch (e) { return null; } finally { clearTimeout(timer); }
