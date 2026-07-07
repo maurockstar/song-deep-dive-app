@@ -17,6 +17,7 @@ const WIKIDATA = "https://www.wikidata.org/w/api.php";
 const COMMONS_FP = "https://commons.wikimedia.org/wiki/Special:FilePath/";
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const DEEZER = "https://api.deezer.com/search/artist?limit=1&q=";
+const MB_BASE = "https://musicbrainz.org/ws/2";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
@@ -155,9 +156,8 @@ const OBJECT_RE = /(compressor|amplifier|\bamp\b|preamp|mixing[\s_-]?(?:desk|boa
 
 // Curated images used on a Wikipedia ARTICLE (real photos of the subject). jpeg + min-size + not near-square
 // (album covers/logos) + not a wrong-context/document file + must name the artist (word-boundary).
-async function articleImages(articleTitle, artist, srcTag, max) {
+async function articleImages(articleTitle, nameTier, srcTag, max) {
   if (!articleTitle) return [];
-  const re = artistNameRe(artist);
   const u = WIKI_API + "?action=query&generator=images&gimlimit=50&titles=" + encodeURIComponent(articleTitle) +
     "&prop=imageinfo&iiprop=url|size|mime&format=json&origin=*";
   const j = await jget(u, {});
@@ -171,35 +171,33 @@ async function articleImages(articleTitle, artist, srcTag, max) {
     const file = (p.title || "").replace(/^File:/, "");
     const clean = file.replace(/_/g, " ");
     if (BAD_FILE.test(file) || OBJECT_RE.test(clean)) continue;
-    // REQUIRE the artist name in the filename. Wikipedia articles also carry context images (related acts,
-    // gear, buildings, places) that are NOT the artist — requiring the name keeps only real photos OF them.
-    // Collaborators still pass via the full multi-artist string (e.g. "De La Soul ..." matches "Gorillaz, De La Soul").
-    if (re && !re.test(clean)) continue;
-    const named = true;
+    // Keep only photos of the ACT (name in filename) or a NAMED band member (full name present). This drops
+    // context images that merely sit in the article (related acts, gear, buildings, places).
+    const tier = nameTier ? nameTier(clean) : 0;
+    if (tier < 0) continue;
     const host = /\/wikipedia\/commons\//.test(ii.url || "") ? "commons.wikimedia.org" : "en.wikipedia.org";
     const base = "https://" + host + "/wiki/Special:FilePath/" + encodeURIComponent(file);
     const cap = fileCaption(file);
-    out.push({ type: "photo", url: base + "?width=1200", thumb: base + "?width=400", title: cap.slice(0, 60), w: ii.width, h: ii.height, yr: photoYear(cap), named: named, src: srcTag });
+    out.push({ type: "photo", url: base + "?width=1200", thumb: base + "?width=400", title: cap.slice(0, 60), w: ii.width, h: ii.height, yr: photoYear(cap), named: tier === 0, src: srcTag });
     if (out.length >= (max || 10)) break;
   }
   return out;
 }
 
 // The ALBUM's own Wikipedia article — images here are era-correct by construction.
-async function albumArticlePhotos(album, artist, max) {
+async function albumArticlePhotos(album, artist, nameTier, max) {
   if (!album) return [];
   const cands = [album + " (" + primaryArtist(artist).trim() + " album)", album + " (album)"];
   for (const c of cands) {
-    const ph = await articleImages(c, artist, "album-article", max);
+    const ph = await articleImages(c, nameTier, "album-article", max);
     if (ph.length) return ph;
   }
   return [];
 }
 
 // Photos from the artist's Wikidata Commons category (P373), context-filtered + artist-name matched.
-async function categoryPhotos(cat, artist, max) {
+async function categoryPhotos(cat, nameTier, max) {
   if (!cat) return [];
-  const re = artistNameRe(artist);
   const u = COMMONS_API + "?action=query&generator=categorymembers&gcmtitle=Category:" + encodeURIComponent(cat) +
     "&gcmtype=file&gcmlimit=50&prop=imageinfo&iiprop=url|size|mime&format=json&origin=*";
   const j = await jget(u, {});
@@ -211,10 +209,12 @@ async function categoryPhotos(cat, artist, max) {
     if (!(ii.width >= 600 && ii.height >= 400)) continue;
     if (Math.abs(ii.width - ii.height) <= Math.max(ii.width, ii.height) * 0.06) continue;
     const file = (p.title || "").replace(/^File:/, "");
-    if (BAD_FILE.test(file)) continue;
-    if (re && !re.test(file.replace(/_/g, " "))) continue;
+    const clean = file.replace(/_/g, " ");
+    if (BAD_FILE.test(file) || OBJECT_RE.test(clean)) continue;
+    const tier = nameTier ? nameTier(clean) : 0;
+    if (tier < 0) continue;
     const cap = fileCaption(file);
-    out.push({ type: "photo", url: commonsFilePath(file, 1200), thumb: commonsFilePath(file, 400), title: cap.slice(0, 60), w: ii.width, h: ii.height, yr: photoYear(cap), src: "commons-cat" });
+    out.push({ type: "photo", url: commonsFilePath(file, 1200), thumb: commonsFilePath(file, 400), title: cap.slice(0, 60), w: ii.width, h: ii.height, yr: photoYear(cap), named: tier === 0, src: "commons-cat" });
     if (out.length >= (max || 10)) break;
   }
   return out;
@@ -270,6 +270,52 @@ async function smartCaptions(apiKey, ctx, arr) {
   } catch (e) { return null; } finally { clearTimeout(timer); }
 }
 
+// Official band members (MusicBrainz "member of band"), cached per artist. Their full names get whitelisted
+// so a member's SOLO photo (e.g. "David Gilmour 1984") is kept, while unrelated people/places stay out.
+async function bandMembers(artist) {
+  const paName = primaryArtist(artist).trim();
+  if (!paName) return [];
+  const mkey = "sdd:mem:1:" + nrm(paName);
+  const cached = await capGet(mkey);
+  if (cached) return cached;
+  let members = [];
+  try {
+    const sr = await jget(MB_BASE + "/artist?query=" + encodeURIComponent('artist:"' + paName + '"') + "&fmt=json&limit=1", {});
+    const a = sr && sr.artists && sr.artists[0];
+    if (a && a.id) {
+      const d = await jget(MB_BASE + "/artist/" + a.id + "?inc=artist-rels&fmt=json", {});
+      const rels = (d && d.relations) || [];
+      const seen = {};
+      rels.forEach(function (r) {
+        if (!/member of band/i.test(r.type || "") || !r.artist || !r.artist.name) return;
+        const words = String(r.artist.name).toLowerCase().split(/[^a-z0-9]+/).filter(function (w) { return w && w.length >= 3; });
+        if (words.length >= 2) { const k = words.join(" "); if (!seen[k]) { seen[k] = 1; members.push(words); } } // need first+last to avoid common-word false positives
+      });
+      members = members.slice(0, 12);
+    }
+  } catch (e) {}
+  await capSet(mkey, members);
+  return members;
+}
+// Returns a tier for a filename: 0 = the act itself, 1 = a named band member, -1 = neither (reject).
+function makeNameTier(artist, members) {
+  const artRe = artistNameRe(artist);
+  const esc = function (w) { return w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
+  const memberRes = (members || []).map(function (words) {
+    return words.map(function (w) { return new RegExp("\\b" + esc(w) + "\\b", "i"); });
+  });
+  return function (clean) {
+    if (artRe && artRe.test(clean)) return 0;
+    for (let i = 0; i < memberRes.length; i++) {
+      const res = memberRes[i];
+      let all = true;
+      for (let k = 0; k < res.length; k++) { if (!res[k].test(clean)) { all = false; break; } }
+      if (all && res.length) return 1;
+    }
+    return -1;
+  };
+}
+
 const A = require("../shared/auth");
 module.exports = async function (context, req) {
   if (A.blockIfUnauthed(context, req)) return;
@@ -284,22 +330,23 @@ module.exports = async function (context, req) {
   const key = (artist + "|" + (album || title)).toLowerCase().replace(/\s+/g, "_");
   if (cache.has(key)) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: cache.get(key) }; return; }
 
-  const [mw, dzPhoto, cover, albs, albumPhotos] = await Promise.all([
-    musicWiki(pa), deezerPhoto(pa), songCover(title, pa), albums(pa),
-    albumArticlePhotos(album, artist, 8)
+  const [mw, dzPhoto, cover, albs, members] = await Promise.all([
+    musicWiki(pa), deezerPhoto(pa), songCover(title, pa), albums(pa), bandMembers(pa)
   ]);
+  const nameTier = makeNameTier(artist, members); // full artist string keeps collaborators; members whitelist solo shots
+  const albumPhotos = await albumArticlePhotos(album, artist, nameTier, 8);
 
   let leadInfobox = null, artPhotos = [], catPhotos = [];
   if (mw) {
     if (mw.image && mw.w >= 600) {
       leadInfobox = { type: "photo", url: wikiImg(mw.image, 1400), thumb: wikiImg(mw.image, 400), title: artist, w: mw.w, h: mw.h, yr: null, src: "wikipedia" };
     }
-    artPhotos = await articleImages(mw.title, artist, "wikipedia-article", 12);
-    if (!artPhotos.length && mw.title) artPhotos = await articleImages(mw.title, artist, "wikipedia-article", 12); // one retry (cold Wikipedia can be slow)
+    artPhotos = await articleImages(mw.title, nameTier, "wikipedia-article", 12);
+    if (!artPhotos.length && mw.title) artPhotos = await articleImages(mw.title, nameTier, "wikipedia-article", 12); // one retry (cold Wikipedia can be slow)
     if (mw.qid) {
       const [cat, p18] = await Promise.all([wdClaim(mw.qid, "P373"), leadInfobox ? Promise.resolve(null) : wdClaim(mw.qid, "P18")]);
       if (!leadInfobox && p18) leadInfobox = { type: "photo", url: commonsFilePath(p18, 1400), thumb: commonsFilePath(p18, 400), title: artist, w: 1000, h: 1000, yr: null, src: "wikidata-p18" };
-      if (cat) catPhotos = await categoryPhotos(cat, pa, 12);
+      if (cat) catPhotos = await categoryPhotos(cat, nameTier, 12);
     }
   }
 
