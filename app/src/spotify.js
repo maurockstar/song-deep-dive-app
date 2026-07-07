@@ -222,7 +222,54 @@
     } catch (e) { return { ok: false, reason: "network", name: t.name, url: url }; }
   }
 
+  // Normalize a title/artist for matching: lowercase, strip accents, drop parenthetical/bracket suffixes
+  // ("(feat...)", "[Live]"), drop "- Remastered 2011"/"- Live" tails, collapse to words.
+  function normName(x) {
+    return String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+      .replace(/\s[-–]\s.*$/, " ")
+      .replace(/\bfeat\.?\b.*$/, " ").replace(/\bft\.?\b.*$/, " ")
+      .replace(/[^a-z0-9]+/g, " ").trim();
+  }
+  // Resolve a recommended title/artist to a REAL Spotify track, but only return it on a confident EXACT
+  // match (title matches AND one of the track's artists matches). Returns { uri, url, name, artist } or null,
+  // so the app can show a recommendation ONLY when it is actually playable/queueable (no dead links -> no churn).
+  async function resolveTrack(title, artist) {
+    var token = await getAccessToken();
+    if (!token) return null;
+    var q = 'track:"' + (title || "") + '"' + (artist ? ' artist:"' + artist + '"' : "");
+    try {
+      var res = await fetch(API + "/search?type=track&limit=5&q=" + encodeURIComponent(q), { headers: { Authorization: "Bearer " + token } });
+      if (!res.ok) return null;
+      var d = await res.json();
+      var items = (d.tracks && d.tracks.items) || [];
+      var wantT = normName(title), wantA = normName(artist);
+      for (var i = 0; i < items.length; i++) {
+        var t = items[i];
+        var gotT = normName(t.name);
+        var arts = (t.artists || []).map(function (a) { return normName(a.name); });
+        var titleOk = !!wantT && (gotT === wantT || (gotT && (gotT.indexOf(wantT) === 0 || wantT.indexOf(gotT) === 0)));
+        var artistOk = !wantA || arts.some(function (a) { return a && (a === wantA || a.indexOf(wantA) > -1 || wantA.indexOf(a) > -1); });
+        if (titleOk && artistOk) {
+          return { uri: t.uri, url: (t.external_urls && t.external_urls.spotify) || null, name: t.name, artist: (t.artists || []).map(function (a) { return a.name; }).join(", ") };
+        }
+      }
+      return null;
+    } catch (e) { return null; }
+  }
+  // Queue an EXACT, already-resolved track URI (plays next, never resets the queue).
+  async function queueUri(uri) {
+    var token = await getAccessToken();
+    if (!token) return { ok: false, reason: "no-auth" };
+    try {
+      var res = await fetch(API + "/me/player/queue?uri=" + encodeURIComponent(uri), { method: "POST", headers: { Authorization: "Bearer " + token } });
+      if (res.ok || res.status === 204) return { ok: true };
+      if (res.status === 404) return { ok: false, reason: "no-device" };
+      return { ok: false, reason: "http-" + res.status };
+    } catch (e) { return { ok: false, reason: "network" }; }
+  }
+
   window.SDD = window.SDD || {};
-  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl, queueTrack: queueTrack };
+  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl, queueTrack: queueTrack, resolveTrack: resolveTrack, queueUri: queueUri };
   window.SDD.player = { spotify: spotifyPlayer, setActivePlayer: setActivePlayer, getActivePlayer: getActivePlayer, control: playerControl };
 })();

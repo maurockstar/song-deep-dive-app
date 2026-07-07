@@ -437,7 +437,14 @@ module.exports = async function (context, req) {
     p._live = LIVE_RE.test((p.title || "") + " " + (p.src || "")) ? 0 : 1;
     p._dist = eraYear ? (p.yr ? Math.abs(p.yr - eraYear) : 9999) : 0;
   });
-  pool.sort(function (a, b) {
+  // Drop catch-all Commons-category photos that are FAR off the album era and NOT a live/performance shot —
+  // later exhibitions, memorials, murals or venues ABOUT the artist that merely name-match but don't depict the
+  // band on/near the album era (e.g. a 2023 "Pink Floyd Pompeji" exhibition hall shown for a 1975 record).
+  const ranked = pool.filter(function (p) {
+    if (p.src === "commons-cat" && eraYear && p.yr && p._live === 1 && Math.abs(p.yr - eraYear) > 15) return false;
+    return true;
+  });
+  ranked.sort(function (a, b) {
     return (a._tier - b._tier) || (a._live - b._live) || (a._dist - b._dist) || ((b.w * b.h) - (a.w * a.h));
   });
 
@@ -445,7 +452,7 @@ module.exports = async function (context, req) {
   const seenUrl = {};
   function add(it) { if (!it) return; var k = photoId(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; delete it._tier; delete it._dist; delete it._live; delete it.named; items.push(it); }
 
-  pool.forEach(add);           // era-ranked, official, on-topic photos (lead reflects the album era)
+  ranked.forEach(add);         // era-ranked, official, on-topic photos (lead reflects the album era)
   add(cover);                  // now-playing album cover (gallery)
   const coverKey = cover ? baseAlbumKey(cover.title) : "";
   for (const a of albs) {      // other album covers (gallery, edition-deduped)

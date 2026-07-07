@@ -348,73 +348,75 @@
   // Clicking a recommended/cover track ADDS it to the user's Spotify queue (plays next) instead of
   // hijacking playback — so their current queue keeps going. Falls back to opening the track in Spotify
   // if there's no auth/active device. No-op (link opens normally) when Spotify isn't wired in.
-  function attachQueueClick(a, title, artist) {
+  // Resolve deeper candidates (recos/covers) to REAL Spotify tracks; keep only exact matches, in order, up to `limit`.
+  function resolveCandidates(cands, limit) {
     var S = window.SDD && window.SDD.spotify;
-    if (!S || !S.queueTrack) return;
+    if (!S || !S.resolveTrack) return Promise.resolve([]);
+    return Promise.all((cands || []).map(function (c) {
+      return S.resolveTrack(c.title, c.artist).then(function (t) { return { cand: c, track: t }; }, function () { return { cand: c, track: null }; });
+    })).then(function (settled) {
+      var out = [];
+      for (var i = 0; i < settled.length; i++) { if (settled[i].track) { out.push(settled[i]); if (out.length >= (limit || 2)) break; } }
+      return out;
+    });
+  }
+  // Build one recommendation/cover button bound to an already-resolved Spotify track (tap = add to queue).
+  function buildRecoButton(title, artist, why, track) {
+    var spIcon = '<span class="reco-ic"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1DB954"/><path d="M6.8 10.4c3.2-.9 6.9-.7 9.7 1M7.4 13.2c2.6-.7 5.6-.5 7.8.8M8 15.8c2-.5 4.2-.4 5.9.6" stroke="#08130c" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></span>';
+    var a = document.createElement("a");
+    a.className = "reco-btn"; a.target = "_blank"; a.rel = "noopener";
+    a.href = (track && track.url) || ("https://open.spotify.com/search/" + encodeURIComponent(((title || "") + " " + (artist || "")).trim()));
+    a.innerHTML = spIcon
+      + '<span class="reco-txt"><span class="reco-title">' + esc(title || "") + '</span>'
+      + '<span class="reco-artist">' + esc(artist || "") + '</span>'
+      + (why ? '<span class="reco-why">' + esc(why) + '</span>' : '')
+      + '<span class="reco-status" aria-live="polite"></span></span>'
+      + '<span class="reco-open" aria-hidden="true">▸</span>';
+    attachQueueClick(a, track);
+    return a;
+  }
+  // Tap a recommendation -> add the EXACT resolved track to the Spotify queue (plays next; never resets it).
+  function attachQueueClick(a, track) {
+    var S = window.SDD && window.SDD.spotify;
     var status = a.querySelector(".reco-status");
     function setStatus(m) { if (status) status.textContent = m; }
     a.addEventListener("click", function (ev) {
       ev.preventDefault();
       if (a.classList.contains("reco-queued") || a.classList.contains("reco-busy")) return;
-      a.classList.add("reco-busy"); setStatus("Adding to your queue\u2026");
-      S.queueTrack(title, artist).then(function (r) {
+      if (!(S && S.queueUri && track && track.uri)) { window.open(a.href, "_blank", "noopener"); return; }
+      a.classList.add("reco-busy"); setStatus("Adding to your queue…");
+      S.queueUri(track.uri).then(function (r) {
         a.classList.remove("reco-busy");
-        if (r && r.ok) { a.classList.add("reco-queued"); setStatus("Added to your Spotify queue \u2014 plays next \u2713"); }
+        if (r && r.ok) { a.classList.add("reco-queued"); setStatus("Added to your Spotify queue — plays next ✓"); }
         else if (r && r.reason === "no-device") { setStatus("Press play on Spotify first, then tap to queue."); }
-        else if (r && r.url) { setStatus("Opening in Spotify\u2026"); window.open(r.url, "_blank", "noopener"); }
-        else { window.open(a.href, "_blank", "noopener"); }
+        else { window.open(a.href, "_blank", "noopener"); setStatus("Opening in Spotify…"); }
       });
     });
   }
+  // "Similar songs" — only tracks that resolve to a REAL Spotify match are shown (no dead links / churn).
   function renderSimilarSongs(wrap, recos) {
     if (!wrap || !recos || !recos.length) return;
-    var sec = document.createElement("div");
-    sec.className = "st-recos";
-    var h = document.createElement("h3"); h.className = "st-dh st-recos-h"; h.textContent = "Similar songs"; sec.appendChild(h);
-    var note = document.createElement("p"); note.className = "st-recos-note"; note.textContent = "Two picks to discover — tap to add to your Spotify queue."; sec.appendChild(note);
-    var spIcon = '<span class="reco-ic"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1DB954"/><path d="M6.8 10.4c3.2-.9 6.9-.7 9.7 1M7.4 13.2c2.6-.7 5.6-.5 7.8.8M8 15.8c2-.5 4.2-.4 5.9.6" stroke="#08130c" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></span>';
-    recos.slice(0, 2).forEach(function (rc) {
-      var a = document.createElement("a");
-      a.className = "reco-btn"; a.target = "_blank"; a.rel = "noopener";
-      a.href = "https://open.spotify.com/search/" + encodeURIComponent(((rc.title || "") + " " + (rc.artist || "")).trim());
-      a.innerHTML = spIcon
-        + '<span class="reco-txt"><span class="reco-title">' + esc(rc.title || "") + '</span>'
-        + '<span class="reco-artist">' + esc(rc.artist || "") + '</span>'
-        + (rc.why ? '<span class="reco-why">' + esc(rc.why) + '</span>' : '')
-        + '<span class="reco-status" aria-live="polite"></span></span>'
-        + '<span class="reco-open" aria-hidden="true">▸</span>';
-      sec.appendChild(a);
-      if (window.SDD && window.SDD.spotify && window.SDD.spotify.searchTrackUrl) {
-        window.SDD.spotify.searchTrackUrl(rc.title, rc.artist).then(function (url) { if (url) a.href = url; });
-      }
-      attachQueueClick(a, rc.title, rc.artist);
+    var sec = document.createElement("div"); sec.className = "st-recos"; wrap.appendChild(sec); // append now so the story photo can anchor above it
+    resolveCandidates(recos, 2).then(function (matched) {
+      if (!matched.length) { if (sec.parentNode) sec.parentNode.removeChild(sec); return; }
+      var h = document.createElement("h3"); h.className = "st-dh st-recos-h"; h.textContent = "Similar songs"; sec.appendChild(h);
+      var note = document.createElement("p"); note.className = "st-recos-note"; note.textContent = "Tap to add to your Spotify queue — plays next."; sec.appendChild(note);
+      matched.forEach(function (m) { sec.appendChild(buildRecoButton(m.cand.title, m.cand.artist, m.cand.why, m.track)); });
     });
-    wrap.appendChild(sec);
   }
   // "Covers" — up to 2 famous covers of THIS song: a short story then a Spotify button, per the user's flow.
+  // "Covers" — same rule: show a cover only when it resolves to a real, playable Spotify track.
   function renderCovers(wrap, covers) {
     if (!wrap || !covers || !covers.length) return;
-    var sec = document.createElement("div");
-    sec.className = "st-recos st-covers";
-    var h = document.createElement("h3"); h.className = "st-dh st-covers-h"; h.textContent = "Covers"; sec.appendChild(h);
-    var spIcon = '<span class="reco-ic"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1DB954"/><path d="M6.8 10.4c3.2-.9 6.9-.7 9.7 1M7.4 13.2c2.6-.7 5.6-.5 7.8.8M8 15.8c2-.5 4.2-.4 5.9.6" stroke="#08130c" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></span>';
-    covers.slice(0, 2).forEach(function (cv) {
-      if (cv.story) { var p = document.createElement("p"); p.className = "st-p"; p.textContent = cv.story; sec.appendChild(p); }
-      var a = document.createElement("a");
-      a.className = "reco-btn"; a.target = "_blank"; a.rel = "noopener";
-      a.href = "https://open.spotify.com/search/" + encodeURIComponent(((cv.title || "") + " " + (cv.artist || "")).trim());
-      a.innerHTML = spIcon
-        + '<span class="reco-txt"><span class="reco-title">' + esc(cv.title || "") + '</span>'
-        + '<span class="reco-artist">' + esc(cv.artist || "") + '</span>'
-        + '<span class="reco-status" aria-live="polite"></span></span>'
-        + '<span class="reco-open" aria-hidden="true">\u25B8</span>';
-      sec.appendChild(a);
-      if (window.SDD && window.SDD.spotify && window.SDD.spotify.searchTrackUrl) {
-        window.SDD.spotify.searchTrackUrl(cv.title, cv.artist).then(function (url) { if (url) a.href = url; });
-      }
-      attachQueueClick(a, cv.title, cv.artist);
+    var sec = document.createElement("div"); sec.className = "st-recos st-covers"; wrap.appendChild(sec);
+    resolveCandidates(covers, 2).then(function (matched) {
+      if (!matched.length) { if (sec.parentNode) sec.parentNode.removeChild(sec); return; }
+      var h = document.createElement("h3"); h.className = "st-dh st-covers-h"; h.textContent = "Covers"; sec.appendChild(h);
+      matched.forEach(function (m) {
+        if (m.cand.story) { var pp = document.createElement("p"); pp.className = "st-p"; pp.textContent = m.cand.story; sec.appendChild(pp); }
+        sec.appendChild(buildRecoButton(m.cand.title, m.cand.artist, null, m.track));
+      });
     });
-    wrap.appendChild(sec);
   }
   // Official video card at the very end of "geeek deeper": a clickable thumbnail with the platform logo
   // centered, opening a new tab (iOS opens the YouTube/Vimeo app via universal link, else the web client).
