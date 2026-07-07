@@ -22,6 +22,7 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const PURGE_TOKEN = "gk_purge_7Qm2Xr9Lp4Vt";  // server-side only (not shipped to the browser); gates cache re-curation
 const CAP_TTL = 60 * 60 * 24 * 90;
 
 const cache = new Map();
@@ -434,6 +435,30 @@ function makeNameTier(artist, members) {
 
 const A = require("../shared/auth");
 module.exports = async function (context, req) {
+  // ---- maintenance: re-apply the latest photo logic for one artist by purging its cached ----
+  // curation (sdd:vis) + captions (sdd:cap). Gated by a server-side token; no Apple auth needed.
+  const _purge = (req.query && req.query.purge) || "";
+  if (_purge) {
+    if (_purge !== PURGE_TOKEN) { context.res = { status: 403, headers: { "Content-Type": "application/json" }, body: { error: "forbidden" } }; return; }
+    const who = ((req.query && req.query.artist) || "").trim();
+    if (!who) { context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "purge needs ?artist=" } }; return; }
+    const a = who.toLowerCase().replace(/\s+/g, "_");
+    const scanDel = async function (pattern) {
+      let cursor = "0", total = 0, guard = 0;
+      do {
+        const r = await redisCmd(["SCAN", cursor, "MATCH", pattern, "COUNT", "300"]);
+        if (!Array.isArray(r)) break;
+        cursor = String(r[0]); const keys = r[1] || [];
+        if (keys.length) { await redisCmd(["DEL"].concat(keys)); total += keys.length; }
+      } while (cursor && cursor !== "0" && ++guard < 200);
+      return total;
+    };
+    const vis = await scanDel("sdd:vis:3:" + a + "|*");
+    const cap = await scanDel("sdd:cap:5:" + a + "|*");
+    let mem = 0; for (const k of Array.from(cache.keys())) { if (k.indexOf(a + "|") === 0) { cache.delete(k); mem++; } }
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { ok: true, artist: who, purged: { vis: vis, cap: cap, mem: mem } } };
+    return;
+  }
   if (A.blockIfUnauthed(context, req)) return;
   const artist = ((req.query && req.query.artist) || "").trim();
   const title = ((req.query && req.query.title) || "").trim();
