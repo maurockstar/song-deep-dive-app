@@ -12,7 +12,7 @@ const WIKI = "https://en.wikipedia.org/api/rest_v1/page/summary/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "1.0"; // bump to invalidate the deeper shared cache when this prompt changes
+const VERSION = "1.1"; // bump to invalidate the deeper shared cache when this prompt changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const SHARED_TTL = 60 * 60 * 24 * 90;
@@ -163,7 +163,9 @@ async function writeDeeperWithClaude(apiKey, f, context) {
     "- NEVER fabricate specific names, dates, credits, chart positions, quotes, or lyrics. If you are unsure of a specific, stay general or omit it. Accuracy beats flourish.\n" +
     "- BE RESPONSIBLE and NON-SENSATIONAL, especially about the artist's life and era: focus on musical, artistic and cultural context. Do NOT dwell on gossip, scandal, addiction, tragedy, health, relationships, or private struggles. No tabloid tone. If a well-known hardship is genuinely essential context, mention it briefly, factually and with dignity — never for shock.\n" +
     "- Do NOT reproduce or paraphrase song lyrics.\n" +
-    "- Only include the 'Covers' section if notable cover versions genuinely exist and you are confident. Only include the 'Echoes' (similar songs) section if there are real, well-known musical kinships. Otherwise omit those sections entirely.\n\n" +
+    "- Only include the 'Covers' section if notable cover versions genuinely exist and you are confident. Only include the 'Echoes' (similar songs) section if there are real, well-known musical kinships. Otherwise omit those sections entirely.\n" +
+    "- Use ONLY the section headings given in the template, verbatim (The song, The album, The era, Producer & engineer, and optionally Covers, Echoes). Do NOT invent any other heading.\n" +
+    "- Write for the reader, in-world. NEVER address data, sources, lookups, uncertainty, or discrepancies (e.g. do not write things like 'a discrepancy to address' or 'the data says'). If you are unsure of something, simply leave it out silently.\n\n" +
     "Output STRICT JSON only — no prose, no markdown fences.";
   const user =
     `Facts:\n${factsBlock(f)}\n\n` +
@@ -199,13 +201,20 @@ async function writeDeeperWithClaude(apiKey, f, context) {
     const parsed = JSON.parse(match[0]);
     const bodyArr = parsed && parsed.deeper && Array.isArray(parsed.deeper.body) ? parsed.deeper.body : null;
     if (!bodyArr || !bodyArr.length) return null;
-    // sanitize: keep only h/p/quote blocks with text; drop a heading that has no following paragraph.
+    // Allowed section headings (normalized). Anything else (e.g. an AI meta-heading like
+    // "A discrepancy to address first") is dropped along with the paragraphs under it.
+    const okHead = /(the song|the album|the era|producer|engineer|studio|covers?|echoes|similar|influence)/i;
+    // sanitize: keep only h/p/quote blocks with text; drop a heading that is off-list or has no body.
     const clean = [];
+    let skipping = false;
     for (let i = 0; i < bodyArr.length; i++) {
       const b = bodyArr[i];
       if (!b || !b.text || typeof b.text !== "string") continue;
       const type = (b.type === "h" || b.type === "quote") ? b.type : "p";
       if (type === "h") {
+        // off-list heading -> skip it and everything under it until the next heading
+        if (!okHead.test(b.text)) { skipping = true; continue; }
+        skipping = false;
         // look ahead for a paragraph before the next heading
         let hasBody = false;
         for (let j = i + 1; j < bodyArr.length; j++) {
@@ -214,9 +223,14 @@ async function writeDeeperWithClaude(apiKey, f, context) {
           if (n.text && String(n.text).trim()) { hasBody = true; break; }
         }
         if (!hasBody) continue;
+        clean.push({ type, text: b.text.trim() });
+        continue;
       }
+      if (skipping) continue;            // paragraph belongs to a dropped off-list section
       clean.push({ type, text: b.text.trim() });
     }
+    // Drop a leading paragraph with no heading (usually an AI preamble).
+    while (clean.length && clean[0].type !== "h") clean.shift();
     return clean.length ? { body: clean } : null;
   } catch (e) { context.log("anthropic error", e.message); return null; } finally { clearTimeout(timer); }
 }
