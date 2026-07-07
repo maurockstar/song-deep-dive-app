@@ -171,10 +171,11 @@ async function articleImages(articleTitle, artist, srcTag, max) {
     const file = (p.title || "").replace(/^File:/, "");
     const clean = file.replace(/_/g, " ");
     if (BAD_FILE.test(file) || OBJECT_RE.test(clean)) continue;
-    // Article images are editor-curated to depict the subject, so we KEEP them even if the filename does
-    // not contain the artist name (band members, frontman, collaborators). We flag whether it does so
-    // name-matched band photos can be ranked first for the lead.
-    const named = re ? re.test(clean) : true;
+    // REQUIRE the artist name in the filename. Wikipedia articles also carry context images (related acts,
+    // gear, buildings, places) that are NOT the artist — requiring the name keeps only real photos OF them.
+    // Collaborators still pass via the full multi-artist string (e.g. "De La Soul ..." matches "Gorillaz, De La Soul").
+    if (re && !re.test(clean)) continue;
+    const named = true;
     const host = /\/wikipedia\/commons\//.test(ii.url || "") ? "commons.wikimedia.org" : "en.wikipedia.org";
     const base = "https://" + host + "/wiki/Special:FilePath/" + encodeURIComponent(file);
     const cap = fileCaption(file);

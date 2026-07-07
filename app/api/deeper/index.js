@@ -21,7 +21,7 @@ const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "1.6"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "1.7"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -219,8 +219,9 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     "- BE RESPONSIBLE and NON-SENSATIONAL, especially about the artist's life/era: focus on musical, artistic and cultural context. No gossip, scandal, addiction, tragedy, health or private struggles for shock. If a well-known hardship is essential context, mention it briefly, factually, with dignity.\n" +
     "- Do NOT reproduce or paraphrase song lyrics.\n\n" +
     "COMPLEMENTARITY (critical): The reader has ALREADY read the short story provided as ALREADY-TOLD. Your job is to ADD NEW knowledge and angles they have NOT read yet. Do NOT restate the facts, phrasing, or anecdotes in ALREADY-TOLD. You may briefly reference something from it ONLY if strictly necessary as a bridge. Going deeper means new information, not a re-tell.\n\n" +
-    "HEADINGS: Use ONLY these section headings, verbatim: The song, The album, The era, Producer & engineer, and optionally Covers (only if real cover versions exist). Do NOT invent other headings. Never address data, sources, lookups, uncertainty or discrepancies — if unsure, silently omit.\n\n" +
+    "HEADINGS: Use ONLY these section headings, verbatim: The song, The album, The era, Producer & engineer. Do NOT invent other headings (covers are handled separately, below). Never address data, sources, lookups, uncertainty or discrepancies — if unsure, silently omit.\n\n" +
     "SIMILAR SONGS (recos): Also pick THREE candidate songs for discovery (the app shows the best two). Rules: (1) EVERY pick is by a DIFFERENT artist than this song's artist AND different from each other — no repeats; (2) NOT from the same album, and NEVER a cover, remix, live version, re-recording or alternate version of THIS same song — recommend genuinely DIFFERENT songs; (3) gravitate to OTHER artists to help the listener discover new acts; (4) each must genuinely match this song's vibe — groove, era, tempo/beat, rhythm, energy and overall feel; (5) each needs a short complete one-line 'why' (<= 16 words) naming the shared musical quality. If a CANDIDATES list is given (real co-listening data), STRONGLY prefer picks from it. CRITICAL: only recommend songs you are highly confident actually exist and are correctly credited to that EXACT artist — never invent a song or mis-attribute a title to the wrong artist. When unsure, choose a more famous, safely-attributed song by a fitting artist that a listener can definitely find on Spotify.\n\n" +
+    "COVERS: Separately, list up to TWO of the MOST FAMOUS real cover versions of THIS song, by OTHER artists (never the original artist). For each: the cover artist, the song title as they released it, and a 1-2 sentence story about that specific cover (what makes it notable — a hit, a reinvention, a famous live performance). Only real, well-known covers you are confident exist and are correctly attributed; if none are truly famous, return an empty covers array. Never invent a cover.\n\n" +
     "Output STRICT JSON only — no prose, no markdown fences.";
   const user =
     `Facts:\n${factsBlock(f)}\n\n` +
@@ -235,14 +236,16 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     `{"type":"h","text":"The era"},` +
     `{"type":"p","text":"where the artist was in life and craft then, and the cultural moment — respectful, non-sensational (1-3 sentences)"},` +
     `{"type":"h","text":"Producer & engineer"},` +
-    `{"type":"p","text":"who shaped the record in the studio and how — only what you are confident about (1-3 sentences)"},` +
-    `{"type":"h","text":"Covers"},` +
-    `{"type":"p","text":"notable cover versions — OMIT this whole section if none genuinely exist"}` +
+    `{"type":"p","text":"who shaped the record in the studio and how — only what you are confident about (1-3 sentences)"}` +
     `],` +
     `"recos":[` +
     `{"title":"song title","artist":"a DIFFERENT artist","why":"short complete line: the shared groove/era/beat/feel"},` +
     `{"title":"song title","artist":"another DIFFERENT artist","why":"short complete line: the shared quality"},` +
     `{"title":"song title","artist":"a third DIFFERENT artist","why":"short complete line: the shared quality"}` +
+    `],` +
+    `"covers":[` +
+    `{"artist":"famous cover artist","title":"the song title as they released it","story":"1-2 sentences on why this cover is notable"},` +
+    `{"artist":"second cover artist","title":"the song title as they released it","story":"1-2 sentences on this cover"}` +
     `]}}`;
   const body = { model: ANTHROPIC_MODEL, max_tokens: 2000, system, messages: [{ role: "user", content: user }] };
   const ctrl = new AbortController();
@@ -264,7 +267,7 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
 
     const seedSet = wordSet(seed || "");
     const seedSize = Object.keys(seedSet).length;
-    const okHead = /(the song|the album|the era|producer|engineer|studio|covers?)/i;
+    const okHead = /(the song|the album|the era|producer|engineer|studio)/i;
     const clean = [];
     let skipping = false;
     for (let i = 0; i < bodyArr.length; i++) {
@@ -300,8 +303,9 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     while (pruned.length && pruned[0].type !== "h") pruned.shift();
 
     const recos = cleanRecos(parsed.deeper.recos, f.artist);
-    if (!pruned.length && !recos.length) return null;
-    return { body: pruned, recos };
+    const covers = cleanCovers(parsed.deeper.covers, f.artist);
+    if (!pruned.length && !recos.length && !covers.length) return null;
+    return { body: pruned, recos, covers };
   } catch (e) { context.log("anthropic error", e.message); return null; } finally { clearTimeout(timer); }
 }
 
@@ -325,6 +329,20 @@ function cleanRecos(arr, songArtist) {
     if (seen[k] || seen["artist:" + na]) return;       // dedupe + one per artist
     seen[k] = 1; seen["artist:" + na] = 1;
     out.push({ title: String(r.title).trim(), artist: String(r.artist).trim(), why: clipWhy(r.why) });
+  });
+  return out.slice(0, 2);
+}
+
+// Validate covers: up to 2 famous covers of THIS song, by OTHER artists, each with a short story.
+function cleanCovers(arr, songArtist) {
+  const pa = norm(primaryArtist(songArtist));
+  const out = [], seen = {};
+  (Array.isArray(arr) ? arr : []).forEach(function (c) {
+    if (!c || !c.artist || !c.title) return;
+    const na = norm(c.artist);
+    if (!na || (pa && na === pa)) return;   // a cover is by ANOTHER artist
+    if (seen[na]) return; seen[na] = 1;      // one per artist
+    out.push({ artist: String(c.artist).trim(), title: String(c.title).trim(), story: clip(c.story || "", 260) });
   });
   return out.slice(0, 2);
 }
@@ -353,7 +371,7 @@ function templateDeeper(f, similarPool) {
     body.push({ type: "p", text: parts.join(" ") });
   }
   const recos = cleanRecos((similarPool || []).slice(0, 2).map(s => ({ title: s.title, artist: s.artist, why: "Loved by listeners of this song." })), f.artist);
-  return { body, recos };
+  return { body, recos, covers: [] };
 }
 
 module.exports = async function (context, req) {
