@@ -21,13 +21,38 @@
 
   // ---------- now playing / hero ----------
   function fmtMs(ms) { if (!ms || ms < 0) ms = 0; var s = Math.floor(ms / 1000), m = Math.floor(s / 60), x = s % 60; return m + ":" + (x < 10 ? "0" : "") + x; }
+  // Set the now-playing title and auto-scroll it horizontally when it's wider than the screen (marquee).
+  function setTitleText(text) {
+    var box = $("gk-title"); if (!box) return;
+    var inner = box.querySelector(".np-title-in");
+    if (!inner) { box.textContent = ""; inner = document.createElement("span"); inner.className = "np-title-in"; box.appendChild(inner); }
+    inner.textContent = text || "";
+    applyTitleMarquee();
+  }
+  function applyTitleMarquee() {
+    var box = $("gk-title"); if (!box) return;
+    var inner = box.querySelector(".np-title-in"); if (!inner) return;
+    box.classList.remove("scroll");
+    var hero = document.querySelector(".hero");
+    if (hero && hero.classList.contains("compact")) return; // compact bar keeps a simple ellipsis
+    requestAnimationFrame(function () {
+      var over = inner.scrollWidth - box.clientWidth;
+      if (over > 8) {
+        var shift = over + 22;                                  // clear the end + a little padding
+        var dur = Math.max(7, Math.min(26, shift / 28 + 4));    // ~28px/s, with sensible min/max
+        inner.style.setProperty("--shift", (-shift) + "px");
+        inner.style.setProperty("--dur", dur + "s");
+        box.classList.add("scroll");
+      }
+    });
+  }
   function setHero(t) {
     if (t) {
-      $("gk-title").textContent = t.title || "—";
+      setTitleText(t.title || "—");
       $("gk-artist").textContent = t.artist || "";
       $("gk-art").style.backgroundImage = t.art ? ('url("' + t.art + '")') : "";
     } else {
-      $("gk-title").textContent = "Nothing playing";
+      setTitleText("Nothing playing");
       $("gk-artist").textContent = "Connect Spotify or search a song";
       $("gk-art").style.backgroundImage = "";
     }
@@ -1088,12 +1113,14 @@
     function setH() { if (topbar) document.documentElement.style.setProperty("--topbar-h", topbar.offsetHeight + "px"); }
     setH();
     window.addEventListener("resize", setH);
+    window.addEventListener("resize", function () { if (typeof applyTitleMarquee === "function") applyTitleMarquee(); });
     var ticking = false;
     function onScroll() {
       if (ticking) return; ticking = true;
       requestAnimationFrame(function () {
         var y = window.scrollY || document.documentElement.scrollTop || 0;
         hero.classList.toggle("compact", y > 36);
+        applyTitleMarquee();
         ticking = false;
       });
     }

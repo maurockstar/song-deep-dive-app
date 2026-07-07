@@ -68,9 +68,9 @@
   .btn-copy{flex:none;border:1px solid var(--border2);background:var(--card);color:var(--ink);border-radius:10px;padding:0 16px;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px}
 
   /* hero */
-  .hero{position:sticky;top:var(--topbar-h,74px);z-index:40;background:rgba(18,10,16,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding-bottom:10px;transition:padding .36s ease}
-  .np-img{transition:width .36s ease,height .36s ease,border-radius .36s ease}
-  .np-title{transition:font-size .36s ease}
+  .hero{position:sticky;top:var(--topbar-h,74px);z-index:40;background:rgba(18,10,16,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding-bottom:10px;transition:padding .6s ease}
+  .np-img{transition:width .6s ease,height .6s ease,border-radius .6s ease}
+  .np-title{transition:font-size .6s ease}
   /* collapsed "mini player" once the page is scrolled — small cover + song/artist + prev/play/next + a thin progress line */
   .hero.compact{display:flex;align-items:center;gap:12px;padding-top:4px;padding-bottom:9px}
   .hero.compact .np{flex:1;min-width:0;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;align-items:center;column-gap:10px;text-align:left}
@@ -95,6 +95,11 @@
   .np-img{width:104px;height:104px;border-radius:15px;border:2px solid var(--bg);box-sizing:border-box;background:linear-gradient(180deg,var(--gold),var(--sun-500)) center/cover no-repeat}
   .np-expand{position:absolute;right:8px;bottom:8px;width:24px;height:24px;border-radius:7px;background:rgba(8,4,2,.55);display:flex;align-items:center;justify-content:center}
   .np-title{font-family:var(--round);font-weight:600;font-size:30px;line-height:1.05;color:var(--ink-hi);margin-top:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .np-title-in{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}
+  /* when the title is wider than the screen, auto-scroll it horizontally (marquee) instead of clipping */
+  #gk-title.scroll{text-align:left}
+  #gk-title.scroll .np-title-in{max-width:none;overflow:visible;text-overflow:clip;animation:npScroll var(--dur,12s) linear infinite;will-change:transform}
+  @keyframes npScroll{0%,10%{transform:translateX(0)}48%,58%{transform:translateX(var(--shift,0))}96%,100%{transform:translateX(0)}}
   .np-artist{color:var(--ink);font-weight:600;font-size:16px;margin-top:3px}
 
   /* player */
@@ -403,7 +408,7 @@
           <div id="gk-art" class="np-img"></div>
           <span class="np-expand"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H5a1 1 0 0 0-1 1v4M15 4h4a1 1 0 0 1 1 1v4M15 20h4a1 1 0 0 0 1-1v-4M9 20H5a1 1 0 0 1-1-1v-4"/></svg></span>
         </button>
-        <div id="gk-title" class="np-title">Nothing playing</div>
+        <div id="gk-title" class="np-title"><span class="np-title-in">Nothing playing</span></div>
         <div id="gk-artist" class="np-artist">Connect Spotify or search a song</div>
       </div>
 
@@ -513,13 +518,13 @@
   </div>
 </div>
 
-<script src="./config.js?v=14"></script>
-<script src="./gate.js?v=14"></script>
-<script src="./log.js?v=14"></script>
-<script src="./i18n.js?v=14"></script>
-<script src="./spotify.js?v=14"></script>
+<script src="./config.js?v=15"></script>
+<script src="./gate.js?v=15"></script>
+<script src="./log.js?v=15"></script>
+<script src="./i18n.js?v=15"></script>
+<script src="./spotify.js?v=15"></script>
 <script src="https://sdk.scdn.co/spotify-player.js" async></script>
-<script src="./applemusic.js?v=14"></script>
-<script src="./app.js?v=14"></script>
+<script src="./applemusic.js?v=15"></script>
+<script src="./app.js?v=15"></script>
 </body>
 </html>
