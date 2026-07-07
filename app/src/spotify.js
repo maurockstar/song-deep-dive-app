@@ -193,7 +193,36 @@
   function setActivePlayer(p) { activePlayer = p; }
   function getActivePlayer() { return activePlayer; }
 
+  // ---------- add a track to the Spotify QUEUE (insert-next; never resets the user's queue) ----------
+  // Resolve the recommended title/artist to a real track, then POST it to the play queue so it plays after
+  // the current song WITHOUT clearing what the user already had lined up. Needs the user-modify-playback-state
+  // scope + an active device. Returns { ok, name, url, reason } so the UI can confirm or fall back to opening.
+  async function searchTrack(title, artist) {
+    var token = await getAccessToken();
+    if (!token) return null;
+    var q = 'track:"' + (title || "") + '"' + (artist ? ' artist:"' + artist + '"' : "");
+    try {
+      var res = await fetch(API + "/search?type=track&limit=1&q=" + encodeURIComponent(q), { headers: { Authorization: "Bearer " + token } });
+      if (!res.ok) return null;
+      var d = await res.json();
+      return (d && d.tracks && d.tracks.items && d.tracks.items[0]) || null;
+    } catch (e) { return null; }
+  }
+  async function queueTrack(title, artist) {
+    var token = await getAccessToken();
+    if (!token) return { ok: false, reason: "no-auth" };
+    var t = await searchTrack(title, artist);
+    if (!t || !t.uri) return { ok: false, reason: "not-found" };
+    var url = (t.external_urls && t.external_urls.spotify) || null;
+    try {
+      var res = await fetch(API + "/me/player/queue?uri=" + encodeURIComponent(t.uri), { method: "POST", headers: { Authorization: "Bearer " + token } });
+      if (res.ok || res.status === 204) return { ok: true, name: t.name, url: url };
+      if (res.status === 404) return { ok: false, reason: "no-device", name: t.name, url: url }; // nothing playing to queue onto
+      return { ok: false, reason: "http-" + res.status, name: t.name, url: url };
+    } catch (e) { return { ok: false, reason: "network", name: t.name, url: url }; }
+  }
+
   window.SDD = window.SDD || {};
-  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl };
+  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl, queueTrack: queueTrack };
   window.SDD.player = { spotify: spotifyPlayer, setActivePlayer: setActivePlayer, getActivePlayer: getActivePlayer, control: playerControl };
 })();

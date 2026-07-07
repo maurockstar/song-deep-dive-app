@@ -135,6 +135,7 @@
   .st-lead .st-media{margin:0 0 18px}
   .st-media-img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top;border-radius:14px;border:1px solid var(--border);background:#1c1018}
   .st-media figcaption{font-family:var(--label);font-size:11px;letter-spacing:.04em;color:var(--dim);margin-top:8px;text-align:center}
+  .st-media .st-credit{display:block;font-size:9px;letter-spacing:.06em;color:var(--dim);opacity:.65;margin-top:2px} /* charter v1.1: CC BY/BY-SA attribution */
   .st-lb{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:rgba(6,3,5,.94);cursor:zoom-out;padding:20px}
   .st-lb.open{display:flex}
   .st-lb img{max-width:96vw;max-height:86vh;object-fit:contain;border-radius:12px;box-shadow:0 30px 80px -20px rgba(0,0,0,.75)}
@@ -167,6 +168,11 @@
   .reco-artist{font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .reco-why{font-size:12px;color:var(--muted);line-height:1.35;margin-top:3px}
   .reco-open{flex:0 0 auto;color:var(--sun);font-size:18px;font-weight:700}
+  .reco-status{display:block;font-size:12px;color:var(--sun);line-height:1.35;margin-top:4px}
+  .reco-status:empty{display:none}
+  .reco-btn.reco-queued{border-color:#1DB954;background:var(--card)}
+  .reco-btn.reco-queued .reco-open{color:#1DB954}
+  .reco-btn.reco-busy{opacity:.7}
   /* official video card — clickable thumbnail, opens YT/Vimeo (app on iOS, else web) */
   .st-video{margin-top:6px}
   .video-card{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:14px;border:1px solid var(--border);background:#0c0710 center/cover no-repeat;overflow:hidden;text-decoration:none;transition:border-color .2s ease}

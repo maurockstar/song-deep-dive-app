@@ -342,13 +342,24 @@ function makeNameTier(artist, members) {
   const memberRes = (members || []).map(function (words) {
     return words.map(function (w) { return new RegExp("\\b" + esc(w) + "\\b", "i"); });
   });
-  // For a SOLO act (no listed band members) whose name has no connector, REJECT "<name> and/with <Other Full
-  // Name>" photos: those are ambiguous two-person shots where the "artist" could be a same-named DIFFERENT
-  // person (identity/legal risk, e.g. a namesake "Richard Hawley and Norma Waterson"). Bands & duos keep them.
-  const applyCo = !(members && members.length) && !/(?:\band\b|\bwith\b|\bfeat\b|\bfeaturing\b|&|\+)/i.test(String(artist || ""));
-  const CO = /\b(?:and|with|feat\.?|featuring|ft\.?|meets|versus|vs|und|avec|et|&)\b\s+[A-Z\u00C0-\u00DE][a-z\u00E0-\u00FF.'\u2019-]+(?:\s+[A-Z\u00C0-\u00DE][a-z\u00E0-\u00FF.'\u2019-]+)+/;
+  // IDENTITY / LEGAL SAFEGUARD. A file like "Richard Hawley and Norma Waterson" is a two-person shot whose
+  // named co-subject we cannot verify is our artist (the leading name could be a same-named DIFFERENT person).
+  // Reject any "... and/with <Other Full Name>" caption UNLESS that other person is a WHITELISTED band member
+  // (then it is a legitimate group photo, e.g. two members of the same band together). Solo artists have no
+  // members to whitelist, so their ambiguous duo shots are dropped; real band/among-members photos stay.
+  const CO = /\b(?:and|with|feat\.?|featuring|ft\.?|meets|versus|vs\.?|und|avec|et|&|\+)\b\s+([A-Z\u00C0-\u00DE][A-Za-z\u00C0-\u00FF.'\u2019-]*(?:\s+[A-Z\u00C0-\u00DE][A-Za-z\u00C0-\u00FF.'\u2019-]*)+)/;
+  const isMemberName = function (name) {
+    for (let i = 0; i < memberRes.length; i++) {
+      const res = memberRes[i];
+      let all = true;
+      for (let k = 0; k < res.length; k++) { if (!res[k].test(name)) { all = false; break; } }
+      if (all && res.length) return true;
+    }
+    return false;
+  };
   return function (clean) {
-    if (applyCo && CO.test(clean)) return -1;
+    const co = clean.match(CO);
+    if (co && !isMemberName(co[1])) return -1;   // unverifiable second subject -> reject (namesake/legal safety)
     if (artRe && artRe.test(clean)) return 0;
     for (let i = 0; i < memberRes.length; i++) {
       const res = memberRes[i];
@@ -402,7 +413,7 @@ module.exports = async function (context, req) {
 
   // Build the photo pool. Two tiers: tier 0 = confirmed band photos (filename names the artist, or the
   // infobox/deezer artist image); tier 1 = other curated article images (band members, frontman,
-  // collaborators, era/mood context). The LEAD is the era-closest TIER-0 photo, so it's always the band in
+  // collaborators, era/mood context). Tier-0 photos lead so the FIRST slot is the artist in
   // the right era; tier-1 photos enrich the later slots. This keeps well-documented acts photo-rich while
   // never letting a non-band context photo lead.
   if (leadInfobox) { leadInfobox.named = true; }

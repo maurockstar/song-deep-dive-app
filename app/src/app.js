@@ -345,12 +345,33 @@
       });
   }
   // "Similar songs" — two cross-artist picks, each opening in the user's Spotify app.
+  // Clicking a recommended/cover track ADDS it to the user's Spotify queue (plays next) instead of
+  // hijacking playback — so their current queue keeps going. Falls back to opening the track in Spotify
+  // if there's no auth/active device. No-op (link opens normally) when Spotify isn't wired in.
+  function attachQueueClick(a, title, artist) {
+    var S = window.SDD && window.SDD.spotify;
+    if (!S || !S.queueTrack) return;
+    var status = a.querySelector(".reco-status");
+    function setStatus(m) { if (status) status.textContent = m; }
+    a.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      if (a.classList.contains("reco-queued") || a.classList.contains("reco-busy")) return;
+      a.classList.add("reco-busy"); setStatus("Adding to your queue\u2026");
+      S.queueTrack(title, artist).then(function (r) {
+        a.classList.remove("reco-busy");
+        if (r && r.ok) { a.classList.add("reco-queued"); setStatus("Added to your Spotify queue \u2014 plays next \u2713"); }
+        else if (r && r.reason === "no-device") { setStatus("Press play on Spotify first, then tap to queue."); }
+        else if (r && r.url) { setStatus("Opening in Spotify\u2026"); window.open(r.url, "_blank", "noopener"); }
+        else { window.open(a.href, "_blank", "noopener"); }
+      });
+    });
+  }
   function renderSimilarSongs(wrap, recos) {
     if (!wrap || !recos || !recos.length) return;
     var sec = document.createElement("div");
     sec.className = "st-recos";
     var h = document.createElement("h3"); h.className = "st-dh st-recos-h"; h.textContent = "Similar songs"; sec.appendChild(h);
-    var note = document.createElement("p"); note.className = "st-recos-note"; note.textContent = "Two picks to discover — opens in Spotify."; sec.appendChild(note);
+    var note = document.createElement("p"); note.className = "st-recos-note"; note.textContent = "Two picks to discover — tap to add to your Spotify queue."; sec.appendChild(note);
     var spIcon = '<span class="reco-ic"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1DB954"/><path d="M6.8 10.4c3.2-.9 6.9-.7 9.7 1M7.4 13.2c2.6-.7 5.6-.5 7.8.8M8 15.8c2-.5 4.2-.4 5.9.6" stroke="#08130c" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></span>';
     recos.slice(0, 2).forEach(function (rc) {
       var a = document.createElement("a");
@@ -359,12 +380,14 @@
       a.innerHTML = spIcon
         + '<span class="reco-txt"><span class="reco-title">' + esc(rc.title || "") + '</span>'
         + '<span class="reco-artist">' + esc(rc.artist || "") + '</span>'
-        + (rc.why ? '<span class="reco-why">' + esc(rc.why) + '</span>' : '') + '</span>'
+        + (rc.why ? '<span class="reco-why">' + esc(rc.why) + '</span>' : '')
+        + '<span class="reco-status" aria-live="polite"></span></span>'
         + '<span class="reco-open" aria-hidden="true">▸</span>';
       sec.appendChild(a);
       if (window.SDD && window.SDD.spotify && window.SDD.spotify.searchTrackUrl) {
         window.SDD.spotify.searchTrackUrl(rc.title, rc.artist).then(function (url) { if (url) a.href = url; });
       }
+      attachQueueClick(a, rc.title, rc.artist);
     });
     wrap.appendChild(sec);
   }
@@ -382,12 +405,14 @@
       a.href = "https://open.spotify.com/search/" + encodeURIComponent(((cv.title || "") + " " + (cv.artist || "")).trim());
       a.innerHTML = spIcon
         + '<span class="reco-txt"><span class="reco-title">' + esc(cv.title || "") + '</span>'
-        + '<span class="reco-artist">' + esc(cv.artist || "") + '</span></span>'
+        + '<span class="reco-artist">' + esc(cv.artist || "") + '</span>'
+        + '<span class="reco-status" aria-live="polite"></span></span>'
         + '<span class="reco-open" aria-hidden="true">\u25B8</span>';
       sec.appendChild(a);
       if (window.SDD && window.SDD.spotify && window.SDD.spotify.searchTrackUrl) {
         window.SDD.spotify.searchTrackUrl(cv.title, cv.artist).then(function (url) { if (url) a.href = url; });
       }
+      attachQueueClick(a, cv.title, cv.artist);
     });
     wrap.appendChild(sec);
   }
@@ -432,14 +457,16 @@
         imgs.forEach(function (mm, idx) {
           var el = new Image();
           el.className = "st-media-img"; el.decoding = "async"; el.alt = mm.cap || ""; el.style.cursor = "zoom-in";
-          el.addEventListener("click", function () { openStoryPhoto(mm.url, mm.cap || ""); });
+          el.addEventListener("click", function () { openStoryPhoto(mm.url, (mm.cap || "") + (mm.credit ? " — " + mm.credit : "")); });
           el.onerror = function () {};
           el.onload = function () {
             if (curStoryKey !== trackKey(t)) return;
             var existing = wrap.querySelectorAll("img.st-media-img");
             for (var z = 0; z < existing.length; z++) { if (existing[z] !== el && existing[z].src === el.src) return; }
             var fig = document.createElement("figure"); fig.className = "st-media"; fig.appendChild(el);
-            var cap = document.createElement("figcaption"); cap.textContent = mm.cap || ""; fig.appendChild(cap);
+            var cap = document.createElement("figcaption"); cap.textContent = mm.cap || "";
+            if (mm.credit) { var cr = document.createElement("span"); cr.className = "st-credit"; cr.textContent = mm.credit; cap.appendChild(cr); } // charter v1.1: required license attribution
+            fig.appendChild(cap);
             var ref = heads[idx + 1] || null;                 // place before the next section heading when possible
             if (ref && ref.parentNode === wrap) wrap.insertBefore(fig, ref);
             else { var tail = wrap.querySelector(".st-covers, .st-recos"); if (tail) wrap.insertBefore(fig, tail); else wrap.appendChild(fig); } // stay ABOVE Covers / Similar songs
@@ -488,7 +515,7 @@
         var isVideo = !!(it.kind === "video" || it.video || (it.type && /video/i.test(it.type)) || (it.url && /youtu|\.mp4|vimeo/i.test(it.url)));
         var hasImg = !!(it.thumb || it.url);
         var bg = hasImg ? ('background-image:url(\'' + esc(it.thumb || it.url) + '\')') : 'background:linear-gradient(160deg,var(--gold),var(--sun-500))';
-        grid += '<div class="mtile" data-full="' + esc(it.url) + '" data-cap="' + esc(it.title || "") + '" style="' + bg + '">'
+        grid += '<div class="mtile" data-full="' + esc(it.url) + '" data-cap="' + esc((it.title || "") + (it.credit ? " — " + it.credit : "")) + '" style="' + bg + '">'
           + (hasImg ? "" : (isVideo ? camIcon : discIcon))
           + (isVideo ? playBadge : "")
           + '<div class="mcap">' + esc(it.title || "") + '</div></div>';
