@@ -219,6 +219,7 @@ module.exports = async function (context, req) {
   const title = ((req.query && req.query.title) || "").trim();
   const album = ((req.query && req.query.album) || "").trim();
   const eraYear = (+(String((req.query && req.query.year) || "").match(/\b(?:18|19|20)\d\d\b/) || [])[0]) || 0;
+  const pa = primaryArtist(artist).trim() || artist; // resolve Wikipedia/Deezer/iTunes by the PRIMARY artist
   if (!artist && !title) { context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Provide ?artist= and/or ?title=" } }; return; }
 
   // Cache keyed by ALBUM so each record is its own combination (same combo only for the same album/artist).
@@ -226,7 +227,7 @@ module.exports = async function (context, req) {
   if (cache.has(key)) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: cache.get(key) }; return; }
 
   const [mw, dzPhoto, cover, albs, albumPhotos] = await Promise.all([
-    musicWiki(artist), deezerPhoto(artist), songCover(title, artist), albums(artist),
+    musicWiki(pa), deezerPhoto(pa), songCover(title, pa), albums(pa),
     albumArticlePhotos(album, artist, 8)
   ]);
 
@@ -240,7 +241,7 @@ module.exports = async function (context, req) {
     if (mw.qid) {
       const [cat, p18] = await Promise.all([wdClaim(mw.qid, "P373"), leadInfobox ? Promise.resolve(null) : wdClaim(mw.qid, "P18")]);
       if (!leadInfobox && p18) leadInfobox = { type: "photo", url: commonsFilePath(p18, 1400), thumb: commonsFilePath(p18, 400), title: artist, w: 1000, h: 1000, yr: null, src: "wikidata-p18" };
-      if (cat) catPhotos = await categoryPhotos(cat, artist, 12);
+      if (cat) catPhotos = await categoryPhotos(cat, pa, 12);
     }
   }
 
