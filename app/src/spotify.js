@@ -352,6 +352,7 @@
   }
 
   // ---------- Liked Songs (user library) — needs user-library-read / user-library-modify ----------
+  // Uses the current /me/library endpoints (uris=spotify:track:ID). The old /me/tracks family is deprecated (403).
   // Is this track in the user's Spotify Liked Songs? Returns true/false, or null when it can't be told
   // (not connected, missing scope -> 403, network error) so the UI can hide the heart instead of lying.
   async function isSaved(id) {
@@ -359,7 +360,7 @@
     var token = await getAccessToken();
     if (!token) return null;
     try {
-      var res = await fetch(API + "/me/tracks/contains?ids=" + encodeURIComponent(id), { headers: { Authorization: "Bearer " + token } });
+      var res = await fetch(API + "/me/library/contains?uris=" + encodeURIComponent("spotify:track:" + id), { headers: { Authorization: "Bearer " + token } });
       if (!res.ok) return null; // 403 = scope not granted yet (reconnect needed)
       var d = await res.json();
       return Array.isArray(d) ? !!d[0] : null;
@@ -372,7 +373,7 @@
     var token = await getAccessToken();
     if (!token) return 401;
     try {
-      var res = await fetch(API + "/me/tracks", { method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ ids: [id] }) });
+      var res = await fetch(API + "/me/library?uris=" + encodeURIComponent("spotify:track:" + id), { method: "PUT", headers: { Authorization: "Bearer " + token } });
       return res.status;
     } catch (e) { return 0; }
   }
@@ -382,7 +383,7 @@
     var token = await getAccessToken();
     if (!token) return 401;
     try {
-      var res = await fetch(API + "/me/tracks", { method: "DELETE", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ ids: [id] }) });
+      var res = await fetch(API + "/me/library?uris=" + encodeURIComponent("spotify:track:" + id), { method: "DELETE", headers: { Authorization: "Bearer " + token } });
       return res.status;
     } catch (e) { return 0; }
   }

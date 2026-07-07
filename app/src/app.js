@@ -111,7 +111,7 @@
     var st = want ? await S.saveTrack(id) : await S.removeTrack(id);
     var ok = st >= 200 && st < 300;
     if (ok) { likeState.saved = want; flashPmsg(want ? "Added to your Spotify Liked Songs" : "Removed from Liked Songs"); }
-    else if (st === 401 || st === 403) { paintLike(likeState.saved); flashPmsg("Saving to Spotify Liked Songs isn't available yet \u2014 we're finishing the Spotify setup for this."); }
+    else if (st === 401) { paintLike(likeState.saved); flashPmsg("Please reconnect Spotify and try again."); }
     else { paintLike(likeState.saved); flashPmsg("Couldn't update Liked Songs right now. Please try again."); }
     likeState.busy = false;
   }
