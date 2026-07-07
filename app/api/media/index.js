@@ -160,6 +160,10 @@ const POLITICS_RE = /\b(president|vice[\s_-]?president|senator|congress|parliame
 // Charter v1.1 "essence-first": live/organic music-making imagery (stage, studio, rehearsal) outranks
 // posed/context shots — the FIRST photo should feel like the music being made.
 const LIVE_RE = /\b(live|concert|konzert|tour|touring|gig|festival|on[\s_-]?stage|stage|perform(?:s|ing|ance|ances)?|in[\s_-]?concert|unplugged|soundcheck|rehearsal|backstage|studio|recording[\s_-]?session)\b/i;
+// "Magic moments" (CEO editorial direction, 2026-07-07): every band had venues/festivals/moments where
+// everything clicked — Woodstock, Glastonbury, the Fillmore, Budokan. Photos from those iconic places
+// outrank even generic live shots; era distance still applies after, so the moment matches the song's era.
+const MAGIC_RE = /\b(woodstock|glastonbury|coachella|lollapalooza|ozzfest|monterey[\s_-]?pop|isle[\s_-]?of[\s_-]?wight|live[\s_-]?aid|us[\s_-]?festival|reading[\s_-]?festival|leeds[\s_-]?festival|newport[\s_-]?(?:folk|jazz)|montreux|roskilde|pinkpop|rock[\s_-]?am[\s_-]?ring|download[\s_-]?festival|donington|bonnaroo|austin[\s_-]?city[\s_-]?limits|fillmore|winterland|whisky[\s_-]?a[\s_-]?go[\s_-]?go|cbgb|marquee[\s_-]?club|cavern[\s_-]?club|royal[\s_-]?albert[\s_-]?hall|madison[\s_-]?square[\s_-]?garden|wembley|red[\s_-]?rocks|budokan|hollywood[\s_-]?bowl|apollo[\s_-]?theater|grand[\s_-]?ole[\s_-]?opry|ryman|troubadour|knebworth|hyde[\s_-]?park|rockpalast|paradiso|tivoli|abbey[\s_-]?road|sun[\s_-]?studio|muscle[\s_-]?shoals|electric[\s_-]?lady|capitol[\s_-]?studios|headley[\s_-]?grange)\b/i;
 // Charter v1.1 license compliance: CC BY / CC BY-SA images legally require visible attribution.
 // Build "Author · License" from Commons extmetadata (HTML-stripped); null when unknown.
 function licenseOf(ii) {
@@ -291,7 +295,7 @@ function cleanTitle(cap, artist) {
 async function smartCaptions(apiKey, ctx, arr) {
   if (!apiKey || !arr.length) return null;
   const list = arr.map(function (c, i) { return (i + 1) + ". " + c; }).join("\n");
-  const system = "You caption photos for a music app. Each image is given by its Wikimedia filename. For each, write a SHORT title (max 5 words) that says WHO or WHAT the photo shows and, when clear, how it connects to the song or artist. Rules: NO year or date (it is added separately); do NOT invent — use only the filename plus well-known facts, and when unclear fall back to a clean generic like the artist/band name or \"On stage\" / \"In the studio\"; no trailing punctuation; Title Case. Output STRICT JSON: an array of strings, exactly one per image, same order.";
+  const system = "You caption photos for a music app. Each image is given by its Wikimedia filename. For each, write a SHORT title (max 6 words) that says WHO or WHAT the photo shows and, when clear, how it connects to the song or artist. Rules: if the filename names an iconic venue or festival (Woodstock, Glastonbury, the Fillmore, Royal Albert Hall, Budokan...), NAME IT — those magic moments are the point; when the photo clearly belongs to the song's era, you may evoke it (\"the Zeppelin III era\"); NO year or date digits (added separately); do NOT invent — use only the filename plus well-known facts, and when unclear fall back to a clean generic like the artist/band name or \"On stage\" / \"In the studio\"; no trailing punctuation; Title Case. Output STRICT JSON: an array of strings, exactly one per image, same order.";
   const user = "Song: \"" + ctx.title + "\" - " + ctx.artist + (ctx.album ? " (album: " + ctx.album + ")" : "") + "\n\nImages:\n" + list + "\n\nReturn a JSON array of " + arr.length + " short captions, in order.";
   const ctrl = new AbortController();
   const timer = setTimeout(function () { ctrl.abort(); }, 12000);
@@ -429,12 +433,14 @@ module.exports = async function (context, req) {
     if (re2 && re2.test(dzPhoto.title || "")) { dzPhoto.named = true; pushPool(dzPhoto); }
   }
 
-  // Charter v1.1 "essence-first" ranking: within confirmed-band (tier 0) photos, LIVE/organic
-  // music-making shots (stage, studio, rehearsal) lead; then era distance (the first photo should be
-  // closest to the album's era; undated sinks below dated when we know the era); then resolution.
-  // Before this, resolution could make an official event photo the hero — never again.
+  // Charter v1.1 "essence-first" + CEO "magic moments" ranking (2026-07-07): within confirmed-band
+  // (tier 0) photos, iconic venue/festival shots (Woodstock, Fillmore, Budokan…) lead, then LIVE/organic
+  // music-making shots (stage, studio, rehearsal), then era distance (the first photo should be closest
+  // to the album's era; undated sinks below dated when we know the era), then resolution.
   pool.forEach(function (p) {
-    p._live = LIVE_RE.test((p.title || "") + " " + (p.src || "")) ? 0 : 1;
+    var s = (p.title || "") + " " + (p.src || "");
+    p._magic = MAGIC_RE.test(s) ? 0 : 1;
+    p._live = (p._magic === 0 || LIVE_RE.test(s)) ? 0 : 1; // a magic venue counts as live/organic
     p._dist = eraYear ? (p.yr ? Math.abs(p.yr - eraYear) : 9999) : 0;
   });
   // Drop catch-all Commons-category photos that are FAR off the album era and NOT a live/performance shot —
@@ -445,12 +451,12 @@ module.exports = async function (context, req) {
     return true;
   });
   ranked.sort(function (a, b) {
-    return (a._tier - b._tier) || (a._live - b._live) || (a._dist - b._dist) || ((b.w * b.h) - (a.w * a.h));
+    return (a._tier - b._tier) || (a._magic - b._magic) || (a._live - b._live) || (a._dist - b._dist) || ((b.w * b.h) - (a.w * a.h));
   });
 
   const items = [];
   const seenUrl = {};
-  function add(it) { if (!it) return; var k = photoId(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; delete it._tier; delete it._dist; delete it._live; delete it.named; items.push(it); }
+  function add(it) { if (!it) return; var k = photoId(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; delete it._tier; delete it._dist; delete it._live; delete it._magic; delete it.named; items.push(it); }
 
   ranked.forEach(add);         // era-ranked, official, on-topic photos (lead reflects the album era)
   add(cover);                  // now-playing album cover (gallery)
@@ -464,7 +470,7 @@ module.exports = async function (context, req) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const photoItems = items.filter(function (x) { return x.type === "photo"; });
   if (photoItems.length) {
-    const capKey = "sdd:cap:2:" + key; // bump the version digit if the caption prompt changes
+    const capKey = "sdd:cap:3:" + key; // v3 2026-07-07: magic-moment/era-insight caption prompt (bump if the prompt changes)
     let capMap = (await capGet(capKey)) || {};
     const missing = photoItems.filter(function (p) { return !capMap[photoId(p.url)]; });
     if (missing.length && apiKey) {
