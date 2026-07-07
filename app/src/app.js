@@ -256,7 +256,7 @@
               fig.appendChild(el);
               var cap = document.createElement("figcaption");
               cap.textContent = mm.cap || "";
-              if (mm.credit) { var cr = document.createElement("span"); cr.className = "st-credit"; cr.textContent = mm.credit; cap.appendChild(cr); } // charter v1.1: required license attribution
+              if (mm.credit) { el.title = mm.credit; el.setAttribute("aria-label", (mm.cap || "") + " — " + mm.credit); } // charter v1.1: attribution kept on the image (tooltip) + full-screen view; removed from the visible caption
               fig.appendChild(cap);
               if (idx === 0) { var lead = panel.querySelector("#st-lead"); if (lead) { if (lead.querySelector(".st-media")) return; lead.appendChild(fig); return; } }
               var bodyEl = panel.querySelector(".st-body");
@@ -492,7 +492,7 @@
             for (var z = 0; z < existing.length; z++) { if (existing[z] !== el && existing[z].src === el.src) return; }
             var fig = document.createElement("figure"); fig.className = "st-media"; fig.appendChild(el);
             var cap = document.createElement("figcaption"); cap.textContent = mm.cap || "";
-            if (mm.credit) { var cr = document.createElement("span"); cr.className = "st-credit"; cr.textContent = mm.credit; cap.appendChild(cr); } // charter v1.1: required license attribution
+            if (mm.credit) { el.title = mm.credit; el.setAttribute("aria-label", (mm.cap || "") + " — " + mm.credit); } // charter v1.1: attribution kept on the image (tooltip) + full-screen view; removed from the visible caption
             fig.appendChild(cap);
             var ref = heads[idx + 1] || null;                 // place before the next section heading when possible
             if (ref && ref.parentNode === wrap) wrap.insertBefore(fig, ref);
