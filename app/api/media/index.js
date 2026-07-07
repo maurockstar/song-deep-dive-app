@@ -342,10 +342,10 @@ async function curatePhotos(apiKey, ctx, photos, meta) {
   const system = "You curate photographs for a music app's now-playing screen. You are shown a song and several numbered candidate photos, and you reply with JSON only.";
   const intro = "Song: \"" + (ctx.title || "") + "\" by " + (ctx.artist || "") +
     (ctx.album ? " (album \"" + ctx.album + "\"" + (ctx.year ? ", " + ctx.year : "") + ")" : "") + ".\n\n" +
-    "Below are " + valid.length + " candidate photos. Pick the ones genuinely worth showing a music fan.\n" +
-    "KEEP only photos that clearly depict THIS artist/band and are interesting: live performance, strong portraits, in the studio, iconic or era-defining moments. Prefer images that fit the song's era and cultural spirit.\n" +
-    "REJECT: anything that does not actually show this artist (objects, logos, places, the wrong subject such as a chemical element), and low-value shots — posed grip-and-grins or handshakes with fans/officials, backstage meet-and-greets, blurry/tiny/watermarked, fan-made or memes, plain album-cover scans.\n" +
-    "Reply with JSON only, best first, up to 6: {\"keep\":[photo numbers]}. If none qualify: {\"keep\":[]}.";
+    "Below are " + valid.length + " candidate photos. Choose the ones worth showing a music fan, ORDERED best first — the FIRST picks are shown most prominently in the story, so they must be the most LEGENDARY, iconic, era-defining images: the shots fans love most about this act (signature live moments, famous venues/festivals, the classic line-up, the definitive portrait of this era).\n" +
+    "Every kept photo MUST clearly depict THIS artist/band and fit the song's era and cultural context. Blend iconic band/performance shots with any striking, era-appropriate imagery; make the first three genuinely memorable.\n" +
+    "REJECT: anything that does not actually show this artist (objects, logos, places, the wrong subject such as a chemical element), the plain album FRONT cover, and low-value shots — posed grip-and-grins or handshakes with fans/officials, backstage meet-and-greets, blurry/tiny/watermarked, fan-made or memes, generic filler.\n" +
+    "Reply with JSON only, best first, up to 6: {\"keep\":[photo numbers]}. Return the best available even if fewer than 3 are truly iconic. If none qualify: {\"keep\":[]}.";
   const content = [{ type: "text", text: intro }];
   valid.forEach(function (v, i) {
     content.push({ type: "text", text: "Photo " + (i + 1) + ":" });
@@ -521,7 +521,7 @@ module.exports = async function (context, req) {
   let curated = ranked;
   const visMeta = {};
   if (apiKey && ranked.length >= 2) {
-    const visKey = "sdd:vis:2:" + key; // bump the digit if the curation prompt changes
+    const visKey = "sdd:vis:3:" + key; // bump the digit if the curation prompt changes
     let order = await capGet(visKey);
     if (order) { visMeta.visStatus = "cache"; }
     if (!order) {
