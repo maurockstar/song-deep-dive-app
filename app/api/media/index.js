@@ -28,7 +28,7 @@ const cache = new Map();
 const CACHE_MAX = 300;
 
 function nrm(x) { return (x || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
-function primaryArtist(a) { return String(a || "").split(/,|&|;|\/|\bfeat\.?\b|\bfeaturing\b|\bwith\b|\bx\b|\bvs\.?\b/i)[0]; }
+function primaryArtist(a) { return String(a || "").split(/,|;|\/|\bfeat\.?\b|\bfeaturing\b|\bwith\b|\bx\b|\bvs\.?\b/i)[0]; }
 // A word-boundary regex of the artist's DISTINCTIVE words (drops "the/and/of...") so a file named
 // "Beatles and George Martin in studio 1966" matches "The Beatles" (glued "thebeatles" would not).
 function artistNameRe(artist) {
@@ -312,6 +312,42 @@ async function smartCaptions(apiKey, ctx, arr) {
   } catch (e) { return null; } finally { clearTimeout(timer); }
 }
 
+// AI vision curation: Claude actually LOOKS at the candidate photos and returns the interesting, on-topic
+// ones — dropping shots that don't depict THIS artist (objects/logos/places, the wrong subject like the
+// chemical element "iron") and low-value ones (posed backstage grip-and-grins with fans/officials). Best
+// first. Returns an ordered subset of the input, [] to mean "reject all", or null on failure.
+async function curatePhotos(apiKey, ctx, photos) {
+  if (!apiKey || !photos || photos.length < 2) return null;
+  const imgs = photos.slice(0, 10);
+  const system = "You curate photographs for a music app's now-playing screen. You are shown a song and several numbered candidate photos, and you reply with JSON only.";
+  const intro = "Song: \"" + (ctx.title || "") + "\" by " + (ctx.artist || "") +
+    (ctx.album ? " (album \"" + ctx.album + "\"" + (ctx.year ? ", " + ctx.year : "") + ")" : "") + ".\n\n" +
+    "Below are " + imgs.length + " candidate photos. Pick the ones genuinely worth showing a music fan.\n" +
+    "KEEP only photos that clearly depict THIS artist/band and are interesting: live performance, strong portraits, in the studio, iconic or era-defining moments. Prefer images that fit the song's era and cultural spirit.\n" +
+    "REJECT: anything that does not actually show this artist (objects, logos, places, the wrong subject such as a chemical element), and low-value shots \u2014 posed grip-and-grins or handshakes with fans/officials, backstage meet-and-greets, blurry/tiny/watermarked, fan-made or memes, plain album-cover scans.\n" +
+    "Reply with JSON only, best first, up to 6: {\"keep\":[photo numbers]}. If none qualify: {\"keep\":[]}.";
+  const content = [{ type: "text", text: intro }];
+  imgs.forEach(function (p, i) {
+    content.push({ type: "text", text: "Photo " + (i + 1) + ":" });
+    content.push({ type: "image", source: { type: "url", url: p.thumb || p.url } });
+  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(function () { ctrl.abort(); }, 22000);
+  try {
+    const r = await fetch(ANTHROPIC_URL, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 150, system: system, messages: [{ role: "user", content: content }] }), signal: ctrl.signal });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const txt = (d.content && d.content[0] && d.content[0].text) || "";
+    const mm = txt.match(/\{[\s\S]*\}/);
+    if (!mm) return null;
+    const parsed = JSON.parse(mm[0]);
+    if (!parsed || !Array.isArray(parsed.keep)) return null;
+    const out = [];
+    parsed.keep.forEach(function (n) { const i = (n | 0) - 1; if (i >= 0 && i < imgs.length && out.indexOf(imgs[i]) < 0) out.push(imgs[i]); });
+    return out;
+  } catch (e) { return null; } finally { clearTimeout(timer); }
+}
+
 // Official band members (MusicBrainz "member of band"), cached per artist. Their full names get whitelisted
 // so a member's SOLO photo (e.g. "David Gilmour 1984") is kept, while unrelated people/places stay out.
 async function bandMembers(artist) {
@@ -382,15 +418,20 @@ module.exports = async function (context, req) {
   const title = ((req.query && req.query.title) || "").trim();
   const album = ((req.query && req.query.album) || "").trim();
   const eraYear = (+(String((req.query && req.query.year) || "").match(/\b(?:18|19|20)\d\d\b/) || [])[0]) || 0;
-  const pa = primaryArtist(artist).trim() || artist; // resolve Wikipedia/Deezer/iTunes by the PRIMARY artist
+  const paPrimary = primaryArtist(artist).trim() || artist;
   if (!artist && !title) { context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Provide ?artist= and/or ?title=" } }; return; }
 
   // Cache keyed by ALBUM so each record is its own combination (same combo only for the same album/artist).
   const key = (artist + "|" + (album || title)).toLowerCase().replace(/\s+/g, "_");
   if (cache.has(key)) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: cache.get(key) }; return; }
 
-  const [mw, dzPhoto, cover, albs, members] = await Promise.all([
-    musicWiki(pa), deezerPhoto(pa), songCover(title, pa), albums(pa), bandMembers(pa)
+  // Resolve the artist's music article. Prefer the FULL name so a band whose name contains "&" or ","
+  // (e.g. "Iron & Wine", "Earth, Wind & Fire") is NOT reduced to a fragment like "Iron" (the element).
+  let mw = await musicWiki(artist);
+  const pa = mw ? artist : paPrimary; // effective artist name for every other lookup
+  if (!mw) mw = await musicWiki(paPrimary);
+  const [dzPhoto, cover, albs, members] = await Promise.all([
+    deezerPhoto(pa), songCover(title, pa), albums(pa), bandMembers(pa)
   ]);
   const nameTier = makeNameTier(artist, members); // full artist string keeps collaborators; members whitelist solo shots
   const albumPhotos = await albumArticlePhotos(album, artist, nameTier, 8);
@@ -454,11 +495,30 @@ module.exports = async function (context, req) {
     return (a._tier - b._tier) || (a._magic - b._magic) || (a._live - b._live) || (a._dist - b._dist) || ((b.w * b.h) - (a.w * a.h));
   });
 
+  // ---- AI vision curation: keep only the interesting, on-topic photos (cached per song so it runs once) ----
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  let curated = ranked;
+  if (apiKey && ranked.length >= 2) {
+    const visKey = "sdd:vis:1:" + key; // bump the digit if the curation prompt changes
+    let order = await capGet(visKey);
+    if (!order) {
+      const picks = await curatePhotos(apiKey, { title: title, artist: pa, album: album, year: eraYear || null }, ranked);
+      if (picks) { order = picks.map(function (p) { return photoId(p.url); }); await capSet(visKey, order); }
+    }
+    if (order && order.length) {
+      const byId = {}; ranked.forEach(function (p) { byId[photoId(p.url)] = p; });
+      const sel = []; order.forEach(function (id) { if (byId[id]) sel.push(byId[id]); });
+      if (sel.length) curated = sel;                    // AI-approved photos, in AI's preferred order
+    } else if (order && order.length === 0) {
+      curated = ranked.slice(0, 3);                     // AI rejected all -> show the top few rather than nothing
+    }
+  }
+
   const items = [];
   const seenUrl = {};
   function add(it) { if (!it) return; var k = photoId(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; delete it._tier; delete it._dist; delete it._live; delete it._magic; delete it.named; items.push(it); }
 
-  ranked.forEach(add);         // era-ranked, official, on-topic photos (lead reflects the album era)
+  curated.forEach(add);        // AI-curated, era-ranked photos (lead reflects the album era)
   add(cover);                  // now-playing album cover (gallery)
   const coverKey = cover ? baseAlbumKey(cover.title) : "";
   for (const a of albs) {      // other album covers (gallery, edition-deduped)
@@ -467,7 +527,6 @@ module.exports = async function (context, req) {
   }
 
   // ---- Rewrite each photo's caption: a short who/what title that links it to the song, then the year ----
-  const apiKey = process.env.ANTHROPIC_API_KEY;
   const photoItems = items.filter(function (x) { return x.type === "photo"; });
   if (photoItems.length) {
     const capKey = "sdd:cap:3:" + key; // v3 2026-07-07: magic-moment/era-insight caption prompt (bump if the prompt changes)
