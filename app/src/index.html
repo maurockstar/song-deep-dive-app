@@ -99,7 +99,8 @@
   /* when the title is wider than the screen, auto-scroll it horizontally (marquee) instead of clipping */
   #gk-title.scroll{text-align:left}
   #gk-title.scroll .np-title-in{max-width:none;overflow:visible;text-overflow:clip;animation:npScroll var(--dur,12s) linear infinite;will-change:transform}
-  @keyframes npScroll{0%,10%{transform:translateX(0)}48%,58%{transform:translateX(var(--shift,0))}96%,100%{transform:translateX(0)}}
+  #gk-title.scroll .np-title-in .seg{padding-right:2.5em}
+  @keyframes npScroll{from{transform:translateX(0)}to{transform:translateX(var(--shift,0))}}
   .np-artist{color:var(--ink);font-weight:600;font-size:16px;margin-top:3px}
 
   /* player */
@@ -518,13 +519,13 @@
   </div>
 </div>
 
-<script src="./config.js?v=17"></script>
-<script src="./gate.js?v=17"></script>
-<script src="./log.js?v=17"></script>
-<script src="./i18n.js?v=17"></script>
-<script src="./spotify.js?v=17"></script>
+<script src="./config.js?v=18"></script>
+<script src="./gate.js?v=18"></script>
+<script src="./log.js?v=18"></script>
+<script src="./i18n.js?v=18"></script>
+<script src="./spotify.js?v=18"></script>
 <script src="https://sdk.scdn.co/spotify-player.js" async></script>
-<script src="./applemusic.js?v=17"></script>
-<script src="./app.js?v=17"></script>
+<script src="./applemusic.js?v=18"></script>
+<script src="./app.js?v=18"></script>
 </body>
 </html>

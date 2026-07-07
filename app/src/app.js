@@ -26,20 +26,28 @@
     var box = $("gk-title"); if (!box) return;
     var inner = box.querySelector(".np-title-in");
     if (!inner) { box.textContent = ""; inner = document.createElement("span"); inner.className = "np-title-in"; box.appendChild(inner); }
+    inner.setAttribute("data-text", text || "");
     inner.textContent = text || "";
     applyTitleMarquee();
   }
   function applyTitleMarquee() {
     var box = $("gk-title"); if (!box) return;
     var inner = box.querySelector(".np-title-in"); if (!inner) return;
+    var txt = inner.getAttribute("data-text") || inner.textContent || "";
     box.classList.remove("scroll");
+    inner.textContent = txt;                                   // single copy for the overflow measurement
     var hero = document.querySelector(".hero");
     if (hero && hero.classList.contains("compact")) return; // compact bar keeps a simple ellipsis
     requestAnimationFrame(function () {
-      var over = inner.scrollWidth - box.clientWidth;
-      if (over > 8) {
-        var shift = over + 22;                                  // clear the end + a little padding
-        var dur = Math.max(7, Math.min(26, shift / 28 + 4));    // ~28px/s, with sensible min/max
+      if ((inner.scrollWidth - box.clientWidth) > 8) {
+        // Seamless continuous marquee: two identical copies (with a gap); scroll left by EXACTLY one copy so
+        // the second lands where the first began — the loop restart is invisible (no snap-back).
+        inner.textContent = "";
+        var s1 = document.createElement("span"); s1.className = "seg"; s1.textContent = txt;
+        var s2 = document.createElement("span"); s2.className = "seg"; s2.textContent = txt; s2.setAttribute("aria-hidden", "true");
+        inner.appendChild(s1); inner.appendChild(s2);
+        var shift = s1.offsetWidth;                             // one copy incl. its trailing gap
+        var dur = Math.max(8, Math.min(40, shift / 50));        // ~50px/s, steady
         inner.style.setProperty("--shift", (-shift) + "px");
         inner.style.setProperty("--dur", dur + "s");
         box.classList.add("scroll");
