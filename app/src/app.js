@@ -844,7 +844,6 @@
     setHero(cur); updateShareLink(cur);
     pstate = { progressMs: 0, durationMs: 0, playing: false, at: Date.now() }; setProgress(0, 0); setPlayIcon(false);
     setActiveTab("cards");
-    setupStickyPlayer();
   }
   var suggestTimer = null, suggestItems = [], activeIdx = -1, sIn, sList;
   function hideSuggest() { if (!sList) return; sList.classList.add("hidden"); sList.innerHTML = ""; suggestItems = []; activeIdx = -1; sIn.setAttribute("aria-expanded", "false"); }
@@ -1023,6 +1022,7 @@
     };
 
     setActiveTab("cards");
+    setupStickyPlayer();
 
     // deep link ?t=&a=
     var qp = new URLSearchParams(location.search);
