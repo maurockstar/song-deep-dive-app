@@ -17,6 +17,11 @@ const WIKIDATA = "https://www.wikidata.org/w/api.php";
 const COMMONS_FP = "https://commons.wikimedia.org/wiki/Special:FilePath/";
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const DEEZER = "https://api.deezer.com/search/artist?limit=1&q=";
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const CAP_TTL = 60 * 60 * 24 * 90;
 
 const cache = new Map();
 const CACHE_MAX = 300;
@@ -214,6 +219,56 @@ async function categoryPhotos(cat, artist, max) {
   return out;
 }
 
+// ---- shared caption cache (Upstash Redis REST; inert until env vars are set) ----
+async function redisCmd(cmd, ms) {
+  if (!REDIS_URL || !REDIS_TOKEN) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms || 4000);
+  try {
+    const r = await fetch(REDIS_URL, { method: "POST", headers: { "Authorization": "Bearer " + REDIS_TOKEN, "Content-Type": "application/json" }, body: JSON.stringify(cmd), signal: ctrl.signal });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return (j && Object.prototype.hasOwnProperty.call(j, "result")) ? j.result : null;
+  } catch (e) { return null; } finally { clearTimeout(timer); }
+}
+async function capGet(k) { const v = await redisCmd(["GET", k]); if (!v || typeof v !== "string") return null; try { return JSON.parse(v); } catch (e) { return null; } }
+async function capSet(k, obj) { try { await redisCmd(["SET", k, JSON.stringify(obj), "EX", String(CAP_TTL)]); } catch (e) {} }
+
+// Rule-based fallback caption: strip the year, archive codes, photo numbers, camera/scan cruft -> short who/what.
+function cleanTitle(cap, artist) {
+  let s = " " + String(cap || "") + " ";
+  s = s.replace(/\b(18[5-9]\d|19\d\d|20\d\d)\b/g, " ");
+  s = s.replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ");
+  s = s.replace(/\bbestanddeelnr\b[\s\S]*$/i, " ");
+  s = s.replace(/\b(cropped|centered|centred|scan(ned)?|retouched|retusche|press ?photo|capitol records|records|official|hi[\s-]?res|version|edit|final|photo|image|jpe?g)\b/gi, " ");
+  s = s.replace(/\b(no|nr|number|part|pt|vol)\.?\s*\d+\b/gi, " ");
+  s = s.replace(/\b\d{4,}\b/g, " ");
+  s = s.replace(/[-\u2013\u2014_]+/g, " ").replace(/\s{2,}/g, " ").replace(/\s+\d{1,3}\s*$/, "").replace(/^[\s,]+|[\s,.]+$/g, "").trim();
+  if (!s || s.length < 2) s = (primaryArtist(artist) || "The artist").trim();
+  return s.slice(0, 48);
+}
+
+// One batched Claude call -> a short "who/what + link to the song" title per photo (no year; added later).
+async function smartCaptions(apiKey, ctx, arr) {
+  if (!apiKey || !arr.length) return null;
+  const list = arr.map(function (c, i) { return (i + 1) + ". " + c; }).join("\n");
+  const system = "You caption photos for a music app. Each image is given by its Wikimedia filename. For each, write a SHORT title (max 5 words) that says WHO or WHAT the photo shows and, when clear, how it connects to the song or artist. Rules: NO year or date (it is added separately); do NOT invent — use only the filename plus well-known facts, and when unclear fall back to a clean generic like the artist/band name or \"On stage\" / \"In the studio\"; no trailing punctuation; Title Case. Output STRICT JSON: an array of strings, exactly one per image, same order.";
+  const user = "Song: \"" + ctx.title + "\" - " + ctx.artist + (ctx.album ? " (album: " + ctx.album + ")" : "") + "\n\nImages:\n" + list + "\n\nReturn a JSON array of " + arr.length + " short captions, in order.";
+  const ctrl = new AbortController();
+  const timer = setTimeout(function () { ctrl.abort(); }, 12000);
+  try {
+    const r = await fetch(ANTHROPIC_URL, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 500, system: system, messages: [{ role: "user", content: user }] }), signal: ctrl.signal });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const text = (data.content && data.content[0] && data.content[0].text) || "";
+    const m = text.match(/\[[\s\S]*\]/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.map(function (x) { return String(x || "").replace(/[\s.,;:]+$/, "").trim(); });
+  } catch (e) { return null; } finally { clearTimeout(timer); }
+}
+
 const A = require("../shared/auth");
 module.exports = async function (context, req) {
   if (A.blockIfUnauthed(context, req)) return;
@@ -287,6 +342,26 @@ module.exports = async function (context, req) {
   for (const a of albs) {      // other album covers (gallery, edition-deduped)
     if (coverKey && baseAlbumKey(a.title) === coverKey) continue;
     add(a);
+  }
+
+  // ---- Rewrite each photo's caption: a short who/what title that links it to the song, then the year ----
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const photoItems = items.filter(function (x) { return x.type === "photo"; });
+  if (photoItems.length) {
+    const capKey = "sdd:cap:2:" + key; // bump the version digit if the caption prompt changes
+    let capMap = (await capGet(capKey)) || {};
+    const missing = photoItems.filter(function (p) { return !capMap[photoId(p.url)]; });
+    if (missing.length && apiKey) {
+      const gen = await smartCaptions(apiKey, { title: title, artist: pa, album: album }, missing.map(function (p) { return p.title; }));
+      if (gen && gen.length === missing.length) {
+        missing.forEach(function (p, i) { if (gen[i]) capMap[photoId(p.url)] = gen[i].slice(0, 48); });
+        await capSet(capKey, capMap);
+      }
+    }
+    photoItems.forEach(function (p) {
+      var short = capMap[photoId(p.url)] || cleanTitle(p.title, artist);
+      p.title = short + (p.yr ? " \u00b7 " + p.yr : "");
+    });
   }
 
   const payload = { artist, title, album: album || null, eraYear: eraYear || null, items, _meta: { source: "wikipedia-article+commons+itunes", artistArticle: mw && mw.title, albumEraPhotos: albumPhotos.length, generatedAt: new Date().toISOString() } };
