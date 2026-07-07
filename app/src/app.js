@@ -258,11 +258,6 @@
   function renderStory(payload) {
     var story = deriveStory(payload);
     if (!story) { notePanel("No deep dive for this one yet — try another song."); return; }
-    var metaParts = [];
-    if (cur && cur.artist) metaParts.push(cur.artist);
-    if (cur && cur.album) metaParts.push(cur.album);
-    if (payload && payload._meta && payload._meta.year) metaParts.push(payload._meta.year);
-    var meta = esc(metaParts.join(" \u00b7 "));
     // Drop the dek when it just repeats (a prefix/substring of) the opening paragraph \u2014 keep the fuller text.
     var dek = story.dek || "";
     var body0 = (story.body && story.body[0] && story.body[0].text) || "";
@@ -273,7 +268,6 @@
       + '<div class="st-kicker">The story</div>'
       + '<h2 class="st-headline">' + esc(story.headline || "") + '</h2>'
       + (dek ? '<p class="st-dek">' + esc(dek) + '</p>' : '')
-      + (meta ? '<div class="st-meta">' + meta + '</div>' : '')
       + '<div class="st-body">' + storyBlocksHtml(story.body, [story.headline, dek]) + '</div>'
       + '</article>';
     enrichStoryRetry(payload, 5);
@@ -825,3 +819,4 @@
 
   document.addEventListener("DOMContentLoaded", init);
 })();
+
