@@ -316,36 +316,57 @@ async function smartCaptions(apiKey, ctx, arr) {
 // ones — dropping shots that don't depict THIS artist (objects/logos/places, the wrong subject like the
 // chemical element "iron") and low-value ones (posed backstage grip-and-grins with fans/officials). Best
 // first. Returns an ordered subset of the input, [] to mean "reject all", or null on failure.
-async function curatePhotos(apiKey, ctx, photos) {
-  if (!apiKey || !photos || photos.length < 2) return null;
-  const imgs = photos.slice(0, 10);
+async function fetchImageB64(url) {
+  if (!url) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(function () { ctrl.abort(); }, 8000);
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": HTTP_UA }, signal: ctrl.signal });
+    if (!r.ok) return null;
+    const ct = (r.headers.get("content-type") || "").toLowerCase();
+    if (ct.indexOf("image/") !== 0) return null;
+    const mime = ct.indexOf("png") > -1 ? "image/png" : ct.indexOf("webp") > -1 ? "image/webp" : ct.indexOf("gif") > -1 ? "image/gif" : "image/jpeg";
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!buf.length || buf.length > 4500000) return null;
+    return { mime: mime, data: buf.toString("base64") };
+  } catch (e) { return null; } finally { clearTimeout(timer); }
+}
+// meta.visStatus is set by the caller for diagnostics.
+async function curatePhotos(apiKey, ctx, photos, meta) {
+  if (!apiKey || !photos || photos.length < 2) { if (meta) meta.visStatus = "skip:few"; return null; }
+  const cand = photos.slice(0, 10);
+  const b64s = await Promise.all(cand.map(function (p) { return fetchImageB64(p.thumb || p.url); }));
+  const valid = [];
+  cand.forEach(function (p, i) { if (b64s[i]) valid.push({ p: p, b64: b64s[i] }); });
+  if (valid.length < 2) { if (meta) meta.visStatus = "skip:noimgs(" + valid.length + ")"; return null; }
   const system = "You curate photographs for a music app's now-playing screen. You are shown a song and several numbered candidate photos, and you reply with JSON only.";
   const intro = "Song: \"" + (ctx.title || "") + "\" by " + (ctx.artist || "") +
     (ctx.album ? " (album \"" + ctx.album + "\"" + (ctx.year ? ", " + ctx.year : "") + ")" : "") + ".\n\n" +
-    "Below are " + imgs.length + " candidate photos. Pick the ones genuinely worth showing a music fan.\n" +
+    "Below are " + valid.length + " candidate photos. Pick the ones genuinely worth showing a music fan.\n" +
     "KEEP only photos that clearly depict THIS artist/band and are interesting: live performance, strong portraits, in the studio, iconic or era-defining moments. Prefer images that fit the song's era and cultural spirit.\n" +
-    "REJECT: anything that does not actually show this artist (objects, logos, places, the wrong subject such as a chemical element), and low-value shots \u2014 posed grip-and-grins or handshakes with fans/officials, backstage meet-and-greets, blurry/tiny/watermarked, fan-made or memes, plain album-cover scans.\n" +
+    "REJECT: anything that does not actually show this artist (objects, logos, places, the wrong subject such as a chemical element), and low-value shots — posed grip-and-grins or handshakes with fans/officials, backstage meet-and-greets, blurry/tiny/watermarked, fan-made or memes, plain album-cover scans.\n" +
     "Reply with JSON only, best first, up to 6: {\"keep\":[photo numbers]}. If none qualify: {\"keep\":[]}.";
   const content = [{ type: "text", text: intro }];
-  imgs.forEach(function (p, i) {
+  valid.forEach(function (v, i) {
     content.push({ type: "text", text: "Photo " + (i + 1) + ":" });
-    content.push({ type: "image", source: { type: "url", url: p.thumb || p.url } });
+    content.push({ type: "image", source: { type: "base64", media_type: v.b64.mime, data: v.b64.data } });
   });
   const ctrl = new AbortController();
-  const timer = setTimeout(function () { ctrl.abort(); }, 22000);
+  const timer = setTimeout(function () { ctrl.abort(); }, 25000);
   try {
     const r = await fetch(ANTHROPIC_URL, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 150, system: system, messages: [{ role: "user", content: content }] }), signal: ctrl.signal });
-    if (!r.ok) return null;
+    if (!r.ok) { if (meta) meta.visStatus = "http:" + r.status; return null; }
     const d = await r.json();
     const txt = (d.content && d.content[0] && d.content[0].text) || "";
     const mm = txt.match(/\{[\s\S]*\}/);
-    if (!mm) return null;
+    if (!mm) { if (meta) meta.visStatus = "noparse"; return null; }
     const parsed = JSON.parse(mm[0]);
-    if (!parsed || !Array.isArray(parsed.keep)) return null;
+    if (!parsed || !Array.isArray(parsed.keep)) { if (meta) meta.visStatus = "nokeep"; return null; }
     const out = [];
-    parsed.keep.forEach(function (n) { const i = (n | 0) - 1; if (i >= 0 && i < imgs.length && out.indexOf(imgs[i]) < 0) out.push(imgs[i]); });
+    parsed.keep.forEach(function (n) { const i = (n | 0) - 1; if (i >= 0 && i < valid.length && out.indexOf(valid[i].p) < 0) out.push(valid[i].p); });
+    if (meta) meta.visStatus = "ok:" + out.length + "/" + valid.length;
     return out;
-  } catch (e) { return null; } finally { clearTimeout(timer); }
+  } catch (e) { if (meta) meta.visStatus = "err"; return null; } finally { clearTimeout(timer); }
 }
 
 // Official band members (MusicBrainz "member of band"), cached per artist. Their full names get whitelisted
@@ -498,11 +519,13 @@ module.exports = async function (context, req) {
   // ---- AI vision curation: keep only the interesting, on-topic photos (cached per song so it runs once) ----
   const apiKey = process.env.ANTHROPIC_API_KEY;
   let curated = ranked;
+  const visMeta = {};
   if (apiKey && ranked.length >= 2) {
-    const visKey = "sdd:vis:1:" + key; // bump the digit if the curation prompt changes
+    const visKey = "sdd:vis:2:" + key; // bump the digit if the curation prompt changes
     let order = await capGet(visKey);
+    if (order) { visMeta.visStatus = "cache"; }
     if (!order) {
-      const picks = await curatePhotos(apiKey, { title: title, artist: pa, album: album, year: eraYear || null }, ranked);
+      const picks = await curatePhotos(apiKey, { title: title, artist: pa, album: album, year: eraYear || null }, ranked, visMeta);
       if (picks) { order = picks.map(function (p) { return photoId(p.url); }); await capSet(visKey, order); }
     }
     if (order && order.length) {
@@ -545,7 +568,7 @@ module.exports = async function (context, req) {
     });
   }
 
-  const payload = { artist, title, album: album || null, eraYear: eraYear || null, items, _meta: { source: "wikipedia-article+commons+itunes", artistArticle: mw && mw.title, albumEraPhotos: albumPhotos.length, generatedAt: new Date().toISOString() } };
+  const payload = { artist, title, album: album || null, eraYear: eraYear || null, items, _meta: { source: "wikipedia-article+commons+itunes", artistArticle: mw && mw.title, albumEraPhotos: albumPhotos.length, vis: visMeta.visStatus || null, generatedAt: new Date().toISOString() } };
   const nPhoto = items.filter(function (x) { return x.type === "photo"; }).length;
   // Cache only a COMPLETE result: >=2 photos, or nothing more to get (no music article) — so a cold
   // Wikipedia timeout that returned just the infobox is NOT cached and simply retries next time.
