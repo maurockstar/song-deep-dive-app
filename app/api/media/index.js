@@ -231,6 +231,7 @@ module.exports = async function (context, req) {
       leadInfobox = { type: "photo", url: wikiImg(mw.image, 1400), thumb: wikiImg(mw.image, 400), title: artist, w: mw.w, h: mw.h, yr: null, src: "wikipedia" };
     }
     artPhotos = await articleImages(mw.title, artist, "wikipedia-article", 12);
+    if (!artPhotos.length && mw.title) artPhotos = await articleImages(mw.title, artist, "wikipedia-article", 12); // one retry (cold Wikipedia can be slow)
     if (mw.qid) {
       const [cat, p18] = await Promise.all([wdClaim(mw.qid, "P373"), leadInfobox ? Promise.resolve(null) : wdClaim(mw.qid, "P18")]);
       if (!leadInfobox && p18) leadInfobox = { type: "photo", url: commonsFilePath(p18, 1400), thumb: commonsFilePath(p18, 400), title: artist, w: 1000, h: 1000, yr: null, src: "wikidata-p18" };
