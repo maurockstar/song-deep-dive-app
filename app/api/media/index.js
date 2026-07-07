@@ -56,7 +56,7 @@ function baseAlbumKey(x) {
 
 async function jget(url, headers, ms) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ms || 7000);
+  const timer = setTimeout(() => ctrl.abort(), ms || 10000);
   try {
     const r = await fetch(url, { headers: headers || {}, signal: ctrl.signal });
     if (!r.ok) return null;
@@ -143,7 +143,7 @@ async function wdClaim(qid, prop) {
   return (typeof v === "string") ? v : null;
 }
 
-const BAD_FILE = /(logo|cover|album|poster|single|tracklist|setlist|ticket|autograph|signature|font|typeface|wordmark|vinyl|cassette|\bcd\b|artwork|sticker|flyer|\bmap\b|diagram|\bgraph\b|timeline|chart|discograph|\bmembers\b|line[\s_-]?up|infobox|\.svg|award|certificate|plaque|ceremony|tribute|convention|\bcamp\b|\bexpo\b|\bfair\b|exhibition|exhibit|ausstellung|\bmuseum\b|galerie|\bgallery\b|lounge|arkaden|booth|audience|\bcrowd\b|projector|\bscreen\b|\bslide\b|presentation|wikipedia|\bstatue\b|sculpture|\bbust\b|waxwork|\bwax\b|tussaud|\bmural\b|graffiti|replica|impersonator|cover[\s_-]?band|cosplay|fan[\s_-]?art|fanart|mosaic|monument|memorial|\bgrave\b|headstone|tombstone|crossing|\bzebra\b|billboard|\bbanner\b|\bstamp\b|banknote|\bbook\b|magazine|newspaper|\bcomic\b|painting|drawing|sketch|caricature|cartoon|figurine|\btoy\b|\bmug\b|t[\s_-]?shirt|telegram|\bletter\b|document|manuscript|postcard|envelope|handwritten|typescript|\bmemo\b|receipt|invoice|contract|facsimile|\bfax\b|lyric[\s_-]?sheet)/i;
+const BAD_FILE = /(logo|cover|album|poster|single|tracklist|setlist|ticket|autograph|signature|font|typeface|wordmark|vinyl|cassette|\bcd\b|artwork|sticker|flyer|\bmap\b|diagram|\bgraph\b|timeline|chart|discograph|\bmembers\b|line[\s_-]?up|infobox|\.svg|award|certificate|plaque|ceremony|tribute|convention|\bcamp\b|\bexpo\b|\bfair\b|exhibition|exhibit|ausstellung|\bmuseum\b|galerie|\bgallery\b|lounge|arkaden|booth|audience|\bcrowd\b|\bfans?\b|microphone|amplifier|projector|\bscreen\b|\bslide\b|presentation|wikipedia|statues?|sculpture|\bbust\b|waxwork|\bwax\b|tussaud|\bmural\b|graffiti|replica|impersonator|cover[\s_-]?band|cosplay|fan[\s_-]?art|fanart|mosaic|monument|memorial|\bgrave\b|headstone|tombstone|crossing|\bzebra\b|billboard|\bbanner\b|\bstamp\b|banknote|\bbook\b|magazine|newspaper|\bcomic\b|painting|drawing|sketch|caricature|cartoon|figurine|\btoy\b|\bmug\b|t[\s_-]?shirt|telegram|\bletter\b|document|manuscript|postcard|envelope|handwritten|typescript|\bmemo\b|receipt|invoice|contract|facsimile|\bfax\b|lyric[\s_-]?sheet)/i;
 
 // Curated images used on a Wikipedia ARTICLE (real photos of the subject). jpeg + min-size + not near-square
 // (album covers/logos) + not a wrong-context/document file + must name the artist (word-boundary).
@@ -276,6 +276,9 @@ module.exports = async function (context, req) {
   }
 
   const payload = { artist, title, album: album || null, eraYear: eraYear || null, items, _meta: { source: "wikipedia-article+commons+itunes", artistArticle: mw && mw.title, albumEraPhotos: albumPhotos.length, generatedAt: new Date().toISOString() } };
-  if (items.length) { if (cache.size > CACHE_MAX) cache.clear(); cache.set(key, payload); }
+  const nPhoto = items.filter(function (x) { return x.type === "photo"; }).length;
+  // Cache only a COMPLETE result: >=2 photos, or nothing more to get (no music article) — so a cold
+  // Wikipedia timeout that returned just the infobox is NOT cached and simply retries next time.
+  if (items.length && (nPhoto >= 2 || !mw)) { if (cache.size > CACHE_MAX) cache.clear(); cache.set(key, payload); }
   context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: payload };
 };
