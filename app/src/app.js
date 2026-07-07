@@ -164,6 +164,7 @@
   var curStoryKey = "";
   var shownStoryPhotos = {};              // photo URLs already used in the first story section (so "geeek deeper" uses different pics)
   var deeperState = { loaded: false, key: "" };
+  var curStoryText = "";                  // the already-shown story text, sent to /api/deeper so it stays complementary
   function artBaseUrl(u) { return (u || "").replace(/\/[0-9]+x[0-9]+[^\/]*$/, ""); } // ignore iTunes size suffix
   function nrmTxt(x) { return (x || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
   function trackKey(t) { return t ? (nrmTxt(t.artist || "") + "|" + nrmTxt(t.title || "")) : ""; }
@@ -269,6 +270,7 @@
     if (dN && bN && (dN === bN || dN.indexOf(bN) > -1 || bN.indexOf(dN) > -1)) dek = "";
     shownStoryPhotos = {};                       // fresh per song
     deeperState = { loaded: false, key: curStoryKey };
+    curStoryText = [story.headline, dek].concat((story.body || []).map(function (b) { return b && b.text; })).filter(Boolean).join("\n"); // seed for complementary deeper
     panel.innerHTML = '<article class="st-read">'
       + '<div class="st-lead" id="st-lead"></div>'
       + '<div class="st-kicker">The story</div>'
@@ -315,7 +317,11 @@
     wrap.setAttribute("data-key", myKey);
     wrap.innerHTML = '<div class="st-deeper-note">Digging deeper…</div>';
     if (btn) btn.classList.add("loading");
-    fetch(CFG.API_BASE + "/deeper?" + new URLSearchParams({ title: t.title || "", artist: t.artist || "" }).toString())
+    fetch(CFG.API_BASE + "/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: t.title || "", artist: t.artist || "", seed: curStoryText || "" })
+    })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (curStoryKey !== myKey) return;
@@ -329,11 +335,36 @@
         deeperState.loaded = true; deeperState.key = myKey;
         if (btn) { btn.classList.remove("loading"); btn.classList.add("open"); var l = btn.querySelector(".lbl"); if (l) l.textContent = "show less"; }
         enrichDeeperMedia(t, wrap);
+        renderSimilarSongs(wrap, deeper.recos);   // "Similar songs" — 2 real Spotify links
       })
       .catch(function () {
         wrap.innerHTML = '<div class="st-deeper-note">Couldn’t load the deeper story right now.</div>';
         if (btn) btn.classList.remove("loading");
       });
+  }
+  // "Similar songs" — two cross-artist picks, each opening in the user's Spotify app.
+  function renderSimilarSongs(wrap, recos) {
+    if (!wrap || !recos || !recos.length) return;
+    var sec = document.createElement("div");
+    sec.className = "st-recos";
+    var h = document.createElement("h3"); h.className = "st-dh st-recos-h"; h.textContent = "Similar songs"; sec.appendChild(h);
+    var note = document.createElement("p"); note.className = "st-recos-note"; note.textContent = "Two picks to discover — opens in Spotify."; sec.appendChild(note);
+    var spIcon = '<span class="reco-ic"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1DB954"/><path d="M6.8 10.4c3.2-.9 6.9-.7 9.7 1M7.4 13.2c2.6-.7 5.6-.5 7.8.8M8 15.8c2-.5 4.2-.4 5.9.6" stroke="#08130c" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></span>';
+    recos.slice(0, 2).forEach(function (rc) {
+      var a = document.createElement("a");
+      a.className = "reco-btn"; a.target = "_blank"; a.rel = "noopener";
+      a.href = "https://open.spotify.com/search/" + encodeURIComponent(((rc.title || "") + " " + (rc.artist || "")).trim());
+      a.innerHTML = spIcon
+        + '<span class="reco-txt"><span class="reco-title">' + esc(rc.title || "") + '</span>'
+        + '<span class="reco-artist">' + esc(rc.artist || "") + '</span>'
+        + (rc.why ? '<span class="reco-why">' + esc(rc.why) + '</span>' : '') + '</span>'
+        + '<span class="reco-open" aria-hidden="true">▸</span>';
+      sec.appendChild(a);
+      if (window.SDD && window.SDD.spotify && window.SDD.spotify.searchTrackUrl) {
+        window.SDD.spotify.searchTrackUrl(rc.title, rc.artist).then(function (url) { if (url) a.href = url; });
+      }
+    });
+    wrap.appendChild(sec);
   }
   // Deeper photos — deliberately DIFFERENT from the first section (shownStoryPhotos are excluded).
   function enrichDeeperMedia(t, wrap) {
@@ -355,7 +386,7 @@
         items.forEach(function (it) { if (it && it.type !== "photo") add(it); });  // then album art
         imgs = imgs.slice(0, 4);
         if (!imgs.length) return;
-        var heads = wrap.querySelectorAll("h3.st-dh");
+        var heads = wrap.querySelectorAll("h3.st-dh:not(.st-recos-h)");
         imgs.forEach(function (mm, idx) {
           var el = new Image();
           el.className = "st-media-img"; el.decoding = "async"; el.alt = mm.cap || ""; el.style.cursor = "zoom-in";

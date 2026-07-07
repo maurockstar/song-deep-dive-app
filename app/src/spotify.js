@@ -100,6 +100,24 @@
   function isConnected() { return !!readTokens(); }
   function logout() { clearTokens(); }
 
+  // Resolve a "title / artist" to a real Spotify link the user can open in the Spotify app.
+  // Uses Spotify Search (still supported; unlike the deprecated /recommendations). Falls back to a
+  // Spotify search URL when the user isn't connected or no exact track is found — still opens the app.
+  async function searchTrackUrl(title, artist) {
+    var human = ((title || "") + (artist ? " " + artist : "")).trim();
+    var fallback = "https://open.spotify.com/search/" + encodeURIComponent(human);
+    try {
+      var token = await getAccessToken();
+      if (!token) return fallback;
+      var q = 'track:"' + (title || "") + '"' + (artist ? ' artist:"' + artist + '"' : "");
+      var res = await fetch(API + "/search?type=track&limit=1&q=" + encodeURIComponent(q), { headers: { Authorization: "Bearer " + token } });
+      if (!res.ok) return fallback;
+      var d = await res.json();
+      var t = d && d.tracks && d.tracks.items && d.tracks.items[0];
+      return (t && t.external_urls && t.external_urls.spotify) ? t.external_urls.spotify : fallback;
+    } catch (e) { return fallback; }
+  }
+
   // ---------- Spotify player adapter (implements the abstraction) ----------
   var spotifyPlayer = {
     name: "spotify",
@@ -175,6 +193,6 @@
   function getActivePlayer() { return activePlayer; }
 
   window.SDD = window.SDD || {};
-  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout };
+  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl };
   window.SDD.player = { spotify: spotifyPlayer, setActivePlayer: setActivePlayer, getActivePlayer: getActivePlayer, control: playerControl };
 })();

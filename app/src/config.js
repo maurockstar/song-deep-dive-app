@@ -19,9 +19,9 @@ window.SDD_CONFIG = {
   API_BASE: "/api",
 
   // App version — single source of truth (bumping it also invalidates the local card cache).
-  // 2.1: clears divergent per-device story caches so every device re-pulls the single canonical story.
   // 2.2: removed the artist/album/year credit line under the story dek.
   // 2.3: fixed broken lead photo (Wikipedia /thumb/ filename) + hide media tiles whose image 404s.
   // 2.4: added the "geeek deeper" second-layer story (button + /api/deeper).
-  VERSION: "2.4"
+  // 2.5: deeper story is complementary to the top story + "Similar songs" (2 real Spotify links).
+  VERSION: "2.5"
 };
