@@ -127,7 +127,7 @@
       if (!token) return null;
       // /me/player (not /currently-playing) so we also get shuffle_state + repeat_state to mirror in the UI.
       var res = await fetch(API + "/me/player", { headers: { Authorization: "Bearer " + token } });
-      if (res.status === 204 || res.status === 202) return null; // no active device
+      if (res.status === 204 || res.status === 202) return { noActiveDevice: true, isPlaying: false }; // paused / no active device
       if (!res.ok) { console.warn("player", res.status); return null; }
       var d = await res.json();
       if (!d || !d.item) return null;
@@ -157,16 +157,37 @@
   async function control(method, path) {
     var token = await getAccessToken();
     if (!token) return false;
-    var url = API + path;
-    // Target the last-seen device so play/pause/next/prev still work after Spotify was paused externally
-    // (a paused device stays listed but "inactive"; without device_id, /play 404s "No active device found").
-    if (activeDeviceId && /^\/me\/player\/(play|pause|next|previous)\b/.test(path)) {
-      url += (path.indexOf("?") > -1 ? "&" : "?") + "device_id=" + encodeURIComponent(activeDeviceId);
-    }
     try {
-      var res = await fetch(url, { method: method, headers: { Authorization: "Bearer " + token } });
+      var res = await fetch(API + path, { method: method, headers: { Authorization: "Bearer " + token } });
       return res.ok || res.status === 204;
     } catch (e) { return false; }
+  }
+  // List the account's Spotify Connect devices (available even when "inactive", e.g. a paused desktop app).
+  async function listDevices() {
+    var token = await getAccessToken();
+    if (!token) return [];
+    try {
+      var r = await fetch(API + "/me/player/devices", { headers: { Authorization: "Bearer " + token } });
+      if (!r.ok) return [];
+      var d = await r.json();
+      return (d && d.devices) || [];
+    } catch (e) { return []; }
+  }
+  // Pick the best controllable device (prefer the active one, else the first non-restricted) and remember it.
+  async function ensureDeviceId() {
+    var devs = await listDevices();
+    var pick = devs.filter(function (d) { return d.id && !d.is_restricted; })
+                   .sort(function (a, b) { return (b.is_active ? 1 : 0) - (a.is_active ? 1 : 0); })[0];
+    if (pick) activeDeviceId = pick.id;
+    return pick ? pick.id : null;
+  }
+  // Try a command; if it fails because there is no ACTIVE device (Spotify paused & went idle), wake an
+  // available device by targeting its device_id and retry — so play/next/prev work without reopening Spotify.
+  async function controlWithDevice(method, base) {
+    if (await control(method, base)) return true;
+    var id = await ensureDeviceId();
+    if (!id) return false;
+    return control(method, base + (base.indexOf("?") > -1 ? "&" : "?") + "device_id=" + encodeURIComponent(id));
   }
   // Local mirrors of shuffle/repeat so the UI can toggle/cycle without a state read.
   // Spotify repeat cycles: off -> context -> track -> off.
@@ -174,10 +195,10 @@
   var repeatModes = ["off", "context", "track"];
   var repeatIdx = 0;
   var playerControl = {
-    play: function () { return control("PUT", "/me/player/play"); },
+    play: function () { return controlWithDevice("PUT", "/me/player/play"); },
     pause: function () { return control("PUT", "/me/player/pause"); },
-    next: function () { return control("POST", "/me/player/next"); },
-    prev: function () { return control("POST", "/me/player/previous"); },
+    next: function () { return controlWithDevice("POST", "/me/player/next"); },
+    prev: function () { return controlWithDevice("POST", "/me/player/previous"); },
     // Returns { ok, state } so the UI can reflect the new value, or { ok:false } if it failed.
     toggleShuffle: async function () {
       var want = !shuffleOn;

@@ -814,6 +814,12 @@
   async function poll() {
     try {
       var track = await P.getActivePlayer().getCurrentTrack();
+      if (track && track.noActiveDevice) {
+        // Spotify has no active device (playback paused/stopped, e.g. on the desktop app) — reflect PAUSED
+        // in the button/icon without wiping the current song, so the app stays in sync with Spotify.
+        if (playing) { playing = false; pstate.playing = false; pstate.at = Date.now(); setPlayIcon(false); }
+        return;
+      }
       if (track) setModeButtons(track.shuffle, track.repeat); // reflect real shuffle/repeat every poll
       if (track && track.id && track.id !== lastPlayingId) {
         lastPlayingId = track.id; manualMode = false; cur = track;
@@ -951,7 +957,7 @@
       }
     } catch (e) { ok = false; }
     // shuffle/repeat fail quietly (e.g. no active device); transport buttons surface the hint
-    if (!ok && (action === "toggle" || action === "next" || action === "prev")) flashPmsg("Reconnect Spotify in ⚙ Setup to control playback (requires Spotify Premium).");
+    if (!ok && (action === "toggle" || action === "next" || action === "prev")) flashPmsg("Couldn’t reach Spotify playback — open the Spotify app on a device, then try again. (Control needs Spotify Premium.)");
     // Re-poll shortly after any control to reconcile the buttons with Spotify's real state.
     setTimeout(poll, 900);
   }
