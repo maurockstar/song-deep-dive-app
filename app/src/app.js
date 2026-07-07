@@ -320,7 +320,7 @@
     fetch(CFG.API_BASE + "/deeper", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: t.title || "", artist: t.artist || "", seed: curStoryText || "" })
+      body: JSON.stringify({ title: t.title || "", artist: t.artist || "", album: t.album || "", seed: curStoryText || "" })
     })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {

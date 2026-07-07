@@ -21,7 +21,7 @@ const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "1.5"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "1.6"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -132,8 +132,8 @@ async function lastfmSimilar(title, artist) {
   return out;
 }
 
-async function gatherDeepFacts(title, artist, context) {
-  const f = { title, artist, year: "", mbArtist: "", album: "", producer: "", engineer: "", writers: "", tags: "", wikiSong: "", wikiArtist: "", wikiAlbum: "" };
+async function gatherDeepFacts(title, artist, context, knownAlbum) {
+  const f = { title, artist, year: "", mbArtist: "", album: "", albumAuthoritative: false, producer: "", engineer: "", writers: "", tags: "", wikiSong: "", wikiArtist: "", wikiAlbum: "" };
   const creditMap = new Map();
 
   const rec = await bestRecording(title, artist);
@@ -167,6 +167,8 @@ async function gatherDeepFacts(title, artist, context) {
   const songCands = artist ? [`${title} (${artist} song)`, `${title} (song)`, title] : [`${title} (song)`, title];
   f.wikiSong = await wikiSummary(songCands);
   if (artist) f.wikiArtist = await wikiSummary([artist, `${artist} (band)`, `${artist} (musician)`, `${artist} (singer)`]);
+  // The now-playing album (from Spotify) is authoritative for THIS track — prefer it over any MB guess.
+  if (knownAlbum && knownAlbum.trim()) { f.album = knownAlbum.trim(); f.albumAuthoritative = true; }
   if (f.album) f.wikiAlbum = await wikiSummary([`${f.album} (${artist} album)`, `${f.album} (album)`, f.album]);
   return f;
 }
@@ -175,7 +177,9 @@ function factsBlock(f) {
   let s = `Song title: ${f.title}\nArtist (as queried): ${f.artist || "unknown"}\n`;
   if (f.mbArtist) s += `Artist credit (MusicBrainz): ${f.mbArtist}\n`;
   if (f.year) s += `First release year: ${f.year}\n`;
-  if (f.album) s += `Appears on album: ${f.album}\n`;
+  if (f.album) s += (f.albumAuthoritative
+    ? `Appears on the album (AUTHORITATIVE — this exact track is on this album; use THIS album name for "The album" and do NOT name any other album): ${f.album}\n`
+    : `Appears on album: ${f.album}\n`);
   if (f.writers) s += `Writer(s): ${f.writers}\n`;
   if (f.producer) s += `Producer(s): ${f.producer}\n`;
   if (f.engineer) s += `Engineer(s): ${f.engineer}\n`;
@@ -359,6 +363,7 @@ module.exports = async function (context, req) {
     artist: ((req.query && req.query.artist) || (req.body && req.body.artist) || "").trim()
   };
   const seed = String((req.body && req.body.seed) || (req.query && req.query.seed) || "").slice(0, 2000);
+  const knownAlbum = String((req.body && req.body.album) || (req.query && req.query.album) || "").slice(0, 200);
   if (!q.title) { context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Provide ?title=" } }; return; }
 
   const key = cacheKey(q);
@@ -377,7 +382,7 @@ module.exports = async function (context, req) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const [facts, similarPool] = await Promise.all([
-    gatherDeepFacts(q.title, q.artist, context),
+    gatherDeepFacts(q.title, q.artist, context, knownAlbum),
     lastfmSimilar(songTitleBase(q.title).trim(), primaryArtist(q.artist))
   ]);
 
