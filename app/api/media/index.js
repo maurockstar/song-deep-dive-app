@@ -418,18 +418,21 @@ module.exports = async function (context, req) {
     if (re2 && re2.test(dzPhoto.title || "")) { dzPhoto.named = true; pushPool(dzPhoto); }
   }
 
-  // Era distance (the FIRST photo should be closest to the album's era). Undated sinks below dated when we
-  // know the era; when we don't, era is neutral and we fall back to tier + resolution.
+  // Charter v1.1 "essence-first" ranking: within confirmed-band (tier 0) photos, LIVE/organic
+  // music-making shots (stage, studio, rehearsal) lead; then era distance (the first photo should be
+  // closest to the album's era; undated sinks below dated when we know the era); then resolution.
+  // Before this, resolution could make an official event photo the hero — never again.
   pool.forEach(function (p) {
+    p._live = LIVE_RE.test((p.title || "") + " " + (p.src || "")) ? 0 : 1;
     p._dist = eraYear ? (p.yr ? Math.abs(p.yr - eraYear) : 9999) : 0;
   });
   pool.sort(function (a, b) {
-    return (a._tier - b._tier) || (a._dist - b._dist) || ((b.w * b.h) - (a.w * a.h));
+    return (a._tier - b._tier) || (a._live - b._live) || (a._dist - b._dist) || ((b.w * b.h) - (a.w * a.h));
   });
 
   const items = [];
   const seenUrl = {};
-  function add(it) { if (!it) return; var k = photoId(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; delete it._tier; delete it._dist; delete it.named; items.push(it); }
+  function add(it) { if (!it) return; var k = photoId(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; delete it._tier; delete it._dist; delete it._live; delete it.named; items.push(it); }
 
   pool.forEach(add);           // era-ranked, official, on-topic photos (lead reflects the album era)
   add(cover);                  // now-playing album cover (gallery)

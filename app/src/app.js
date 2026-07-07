@@ -208,7 +208,7 @@
             if (curArt && (url === curArt || base === curArtBase)) return;               // exact same file as the now-playing cover
             if (it.type === "album" && isCurrentAlbum(it.title)) return;                 // the current album's cover (fuzzy: ignores remaster/year suffixes)
             seen[base] = 1;
-            imgs.push({ url: url, cap: it.title || t.artist || "" });
+            imgs.push({ url: url, cap: it.title || t.artist || "", credit: it.credit || "" });
           }
           items.forEach(function (it) { if (it && it.type === "photo") add(it); }); // ONLY real, on-topic band/era photos — never album covers as inline editorial
           imgs = imgs.slice(0, 3);
@@ -219,7 +219,7 @@
             el.className = "st-media-img";
             el.decoding = "async"; el.alt = mm.cap || "";  // NOTE: never set loading="lazy" here — the img is only inserted inside onload, so a lazy (detached) image would never load and never fire onload (deadlock).
             el.style.cursor = "zoom-in";
-            el.addEventListener("click", function () { openStoryPhoto(mm.url, mm.cap || ""); });
+            el.addEventListener("click", function () { openStoryPhoto(mm.url, (mm.cap || "") + (mm.credit ? " — " + mm.credit : "")); });
             el.onerror = function () {};
             el.onload = function () {
               if (key !== curStoryKey || curTab !== "cards") return;
@@ -231,6 +231,7 @@
               fig.appendChild(el);
               var cap = document.createElement("figcaption");
               cap.textContent = mm.cap || "";
+              if (mm.credit) { var cr = document.createElement("span"); cr.className = "st-credit"; cr.textContent = mm.credit; cap.appendChild(cr); } // charter v1.1: required license attribution
               fig.appendChild(cap);
               if (idx === 0) { var lead = panel.querySelector("#st-lead"); if (lead) { if (lead.querySelector(".st-media")) return; lead.appendChild(fig); return; } }
               var bodyEl = panel.querySelector(".st-body");
