@@ -963,6 +963,21 @@
     setTimeout(poll, 900);
   }
 
+  function onMobileDevice() { return /iPhone|iPad|iPod|Android|Mobile/i.test((typeof navigator !== "undefined" && navigator.userAgent) || ""); }
+  // Play/pause tap. On a phone, RESUMING plays on the phone: an idle iPhone isn't a controllable Spotify
+  // device, so we open the current track in the Spotify app (it plays there and becomes the active device,
+  // after which geeek controls it directly). Done synchronously from the tap so iOS doesn't block the launch.
+  // Pausing, and everything on desktop, use the normal Web API transport.
+  function playPause() {
+    if (onMobileDevice() && !playing && cur && cur.id && S.isConnected()) {
+      window.open("https://open.spotify.com/track/" + encodeURIComponent(cur.id), "_blank");
+      playing = true; setPlayIcon(true); pstate.playing = true; pstate.at = Date.now();
+      setTimeout(poll, 3000);
+      return;
+    }
+    transport("toggle");
+  }
+
   // ---------- init ----------
   function init() {
     panel = $("gk-panel"); hint = $("gk-hint"); tabsEl = $("gk-tabs");
@@ -1013,7 +1028,7 @@
     $("gk-share-scrim") && $("gk-share-scrim").addEventListener("click", closePanels);
 
     // transport
-    $("gk-playbtn").addEventListener("click", function () { transport("toggle"); this.blur(); });
+    $("gk-playbtn").addEventListener("click", function () { playPause(); this.blur(); });
     $("gk-prev").addEventListener("click", function () { transport("prev"); this.blur(); });
     $("gk-next").addEventListener("click", function () { transport("next"); this.blur(); });
     $("gk-shuffle") && $("gk-shuffle").addEventListener("click", function () { transport("shuffle"); this.blur(); });
@@ -1025,7 +1040,7 @@
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") $("gk-lightbox").classList.remove("open"); });
     // lightbox playback controls (stop propagation so they don't close the lightbox)
     [["gk-lb-play", "toggle"], ["gk-lb-prev", "prev"], ["gk-lb-next", "next"], ["gk-lb-shuffle", "shuffle"], ["gk-lb-repeat", "repeat"]].forEach(function (p) {
-      var el = $(p[0]); if (el) el.addEventListener("click", function (e) { e.stopPropagation(); transport(p[1]); });
+      var el = $(p[0]); if (el) el.addEventListener("click", function (e) { e.stopPropagation(); if (p[1] === "toggle") playPause(); else transport(p[1]); });
     });
 
     // shared ui hooks for Apple Music provider
