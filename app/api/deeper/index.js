@@ -22,7 +22,7 @@ const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "1.9"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "2.0"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -106,6 +106,18 @@ async function wikiSummary(candidates) {
   for (const c of candidates) {
     const s = await jget(WIKI + encodeURIComponent(c), {});
     if (s && s.extract && s.type !== "disambiguation") return s.extract.trim();
+  }
+  return "";
+}
+// Music-validated artist summary: skip non-music entities (e.g. "Cream" the dairy product) so the story
+// never describes the wrong thing. Only accept an article that reads like a musical act.
+const DEEP_MUSIC_RE = /\b(band|duo|trio|quartet|quintet|sextet|musician|singer|songwriter|rapper|record producer|producer|dj|group|rock|pop|hip[\s-]?hop|metal|jazz|orchestra|ensemble|composer|indie|folk|punk|soul|reggae|electronic|country|blues|rnb|r&b|guitarist|drummer|bassist|vocalist|discograph)\b/i;
+async function wikiArtistSummary(candidates) {
+  for (const c of candidates) {
+    const s = await jget(WIKI + encodeURIComponent(c), {});
+    if (!s || s.type === "disambiguation" || !s.extract) continue;
+    if (!DEEP_MUSIC_RE.test((s.description || "") + " " + (s.extract || ""))) continue;
+    return s.extract.trim();
   }
   return "";
 }
@@ -216,7 +228,7 @@ async function gatherDeepFacts(title, artist, context, knownAlbum) {
 
   const songCands = artist ? [`${title} (${artist} song)`, `${title} (song)`, title] : [`${title} (song)`, title];
   f.wikiSong = await wikiSummary(songCands);
-  if (artist) f.wikiArtist = await wikiSummary([artist, `${artist} (band)`, `${artist} (musician)`, `${artist} (singer)`]);
+  if (artist) f.wikiArtist = await wikiArtistSummary([artist, `${artist} (band)`, `${artist} (musician)`, `${artist} (singer)`]);
   // The now-playing album (from Spotify) is authoritative for THIS track — prefer it over any MB guess.
   if (knownAlbum && knownAlbum.trim()) { f.album = knownAlbum.trim(); f.albumAuthoritative = true; }
   if (f.album) f.wikiAlbum = await wikiSummary([`${f.album} (${artist} album)`, `${f.album} (album)`, f.album]);
@@ -269,6 +281,7 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     "- BE RESPONSIBLE and NON-SENSATIONAL, especially about the artist's life/era: focus on musical, artistic and cultural context. No gossip, scandal, addiction, tragedy, health or private struggles for shock. If a well-known hardship is essential context, mention it briefly, factually, with dignity.\n" +
     "- Do NOT reproduce or paraphrase song lyrics.\n\n" +
     "COMPLEMENTARITY (critical): The reader has ALREADY read the short story provided as ALREADY-TOLD. Your job is to ADD NEW knowledge and angles they have NOT read yet. Do NOT restate the facts, phrasing, or anecdotes in ALREADY-TOLD. You may briefly reference something from it ONLY if strictly necessary as a bridge. Going deeper means new information, not a re-tell.\n\n" +
+    "NO ENCYCLOPEDIC RE-INTRODUCTION (critical): Never open a section with a dictionary or Wikipedia-style definition, and do NOT restate who the artist is, the release date, record label, or chart positions as if introducing them for the first time \u2014 the reader already knows the basics. Continue with fresh, flowing prose that goes DEEPER (craft, sound, meaning, context, legacy). The Wikipedia extracts in Facts are for factual accuracy ONLY \u2014 NEVER copy or paraphrase their wording.\n\n" +
     "HEADINGS: Use ONLY these section headings, verbatim: The song, The album, The era, Producer & engineer. Do NOT invent other headings (covers are handled separately, below). Never address data, sources, lookups, uncertainty or discrepancies — if unsure, silently omit.\n\n" +
     "SIMILAR SONGS (recos): Also pick FIVE candidate songs for discovery (the app shows only ones a listener can actually find on Spotify, best two). Rules: (1) EVERY pick is by a DIFFERENT artist than this song's artist AND different from each other — no repeats; (2) NOT from the same album, and NEVER a cover, remix, live version, re-recording or alternate version of THIS same song — recommend genuinely DIFFERENT songs; (3) gravitate to OTHER artists to help the listener discover new acts; (4) each must genuinely match this song's vibe — groove, era, tempo/beat, rhythm, energy and overall feel; (5) each needs a short complete one-line 'why' (<= 16 words) naming the shared musical quality. If a CANDIDATES list is given (real co-listening data), STRONGLY prefer picks from it. CRITICAL: only recommend songs you are highly confident actually exist and are correctly credited to that EXACT artist — never invent a song or mis-attribute a title to the wrong artist. When unsure, choose a more famous, safely-attributed song by a fitting artist that a listener can definitely find on Spotify.\n\n" +
     "COVERS: Separately, list up to FOUR of the MOST FAMOUS real cover versions of THIS song, by OTHER artists (never the original artist). For each: the cover artist, the song title as they released it, and a 1-2 sentence story about that specific cover (what makes it notable — a hit, a reinvention, a famous live performance). Only real, well-known covers you are confident exist and are correctly attributed; if none are truly famous, return an empty covers array. Never invent a cover.\n\n" +
@@ -280,7 +293,7 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     `Write STRICT JSON in exactly this shape. Short paragraphs (1-3 sentences). Ground names/dates/credits in the facts; add well-known context; never fabricate; never include lyrics; keep the era section respectful. Include a section ONLY if you have real substance (omit Covers if none genuinely exist):\n` +
     `{"deeper":{"body":[` +
     `{"type":"h","text":"The song"},` +
-    `{"type":"p","text":"NEW deeper detail on the song's making, sound, structure or meaning — not already told (1-3 sentences)"},` +
+    `{"type":"p","text":"NEW deeper detail on the song (its making, sound, structure, meaning or legacy) \u2014 a genuine continuation, NOT a definition or a recap of release facts; never restart (1-3 sentences)"},` +
     `{"type":"h","text":"The album"},` +
     `{"type":"p","text":"the album it lives on and how the song fits it (1-3 sentences)"},` +
     `{"type":"h","text":"The era"},` +

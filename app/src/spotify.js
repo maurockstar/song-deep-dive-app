@@ -351,6 +351,41 @@
     } catch (e) { return false; }
   }
 
-  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl, queueTrack: queueTrack, resolveTrack: resolveTrack, queueUri: queueUri, sdkAvailable: sdkAvailable, playHere: playHere, sdkNeedsReconnect: sdkNeedsReconnect, initSdkPlayer: initSdkPlayer };
+  // ---------- Liked Songs (user library) — needs user-library-read / user-library-modify ----------
+  // Is this track in the user's Spotify Liked Songs? Returns true/false, or null when it can't be told
+  // (not connected, missing scope -> 403, network error) so the UI can hide the heart instead of lying.
+  async function isSaved(id) {
+    if (!id) return null;
+    var token = await getAccessToken();
+    if (!token) return null;
+    try {
+      var res = await fetch(API + "/me/tracks/contains?ids=" + encodeURIComponent(id), { headers: { Authorization: "Bearer " + token } });
+      if (!res.ok) return null; // 403 = scope not granted yet (reconnect needed)
+      var d = await res.json();
+      return Array.isArray(d) ? !!d[0] : null;
+    } catch (e) { return null; }
+  }
+  // Add to Liked Songs. Returns true on success.
+  async function saveTrack(id) {
+    if (!id) return false;
+    var token = await getAccessToken();
+    if (!token) return false;
+    try {
+      var res = await fetch(API + "/me/tracks?ids=" + encodeURIComponent(id), { method: "PUT", headers: { Authorization: "Bearer " + token } });
+      return res.ok || res.status === 200;
+    } catch (e) { return false; }
+  }
+  // Remove from Liked Songs. Returns true on success.
+  async function removeTrack(id) {
+    if (!id) return false;
+    var token = await getAccessToken();
+    if (!token) return false;
+    try {
+      var res = await fetch(API + "/me/tracks?ids=" + encodeURIComponent(id), { method: "DELETE", headers: { Authorization: "Bearer " + token } });
+      return res.ok || res.status === 200;
+    } catch (e) { return false; }
+  }
+
+  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl, queueTrack: queueTrack, resolveTrack: resolveTrack, queueUri: queueUri, sdkAvailable: sdkAvailable, playHere: playHere, sdkNeedsReconnect: sdkNeedsReconnect, initSdkPlayer: initSdkPlayer, isSaved: isSaved, saveTrack: saveTrack, removeTrack: removeTrack };
   window.SDD.player = { spotify: spotifyPlayer, setActivePlayer: setActivePlayer, getActivePlayer: getActivePlayer, control: playerControl };
 })();

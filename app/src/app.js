@@ -79,6 +79,41 @@
     ["gk-shuffle", "gk-lb-shuffle"].forEach(function (id) { var el = $(id); if (el) el.classList.toggle("on", son); });
     ["gk-repeat", "gk-lb-repeat"].forEach(function (id) { var el = $(id); if (el) { el.classList.toggle("on", ron); el.classList.toggle("one", repeatState === "track"); } });
   }
+  // ---------- Liked Songs heart: save/remove the current Spotify track in the user's library ----------
+  var likeState = { id: null, saved: false, busy: false };
+  function likeEls() { return ["gk-like", "gk-lb-like"].map($).filter(Boolean); }
+  function paintLike(saved) {
+    likeEls().forEach(function (el) {
+      el.classList.toggle("on", !!saved);
+      el.setAttribute("aria-pressed", saved ? "true" : "false");
+      el.setAttribute("aria-label", saved ? "Remove from Liked Songs" : "Save to Liked Songs");
+    });
+  }
+  function showLike(show) { likeEls().forEach(function (el) { el.hidden = !show; }); }
+  // Show the heart only for a real Spotify track id, when connected, and when the library scope
+  // actually answered (null -> hide, so we never paint a wrong saved/unsaved state).
+  async function refreshLike(id) {
+    likeState.id = id || null;
+    if (!id || !S || !S.isConnected || !S.isConnected()) { showLike(false); return; }
+    var saved = await S.isSaved(id);
+    if (likeState.id !== id) return;                 // track changed while awaiting
+    if (saved === null) { showLike(false); return; } // no scope / error
+    likeState.saved = saved; paintLike(saved); showLike(true);
+  }
+  // Toggle save <-> remove with optimistic UI + rollback if Spotify rejects it.
+  async function toggleLike() {
+    var id = likeState.id;
+    if (!id || likeState.busy || !S) return;
+    likeState.busy = true;
+    var want = !likeState.saved;
+    paintLike(want);
+    if (want) likeEls().forEach(function (el) { el.classList.add("pop"); setTimeout(function () { el.classList.remove("pop"); }, 360); });
+    var ok = want ? await S.saveTrack(id) : await S.removeTrack(id);
+    if (ok) { likeState.saved = want; flashPmsg(want ? "Added to your Spotify Liked Songs" : "Removed from Liked Songs"); }
+    else { paintLike(likeState.saved); flashPmsg("Couldn't update Liked Songs \u2014 reconnect Spotify and try again."); }
+    likeState.busy = false;
+  }
+
   function setProgress(progressMs, durationMs) {
     var pct = durationMs ? Math.min(100, progressMs / durationMs * 100) : 0;
     $("gk-fill").style.width = pct + "%";
@@ -223,7 +258,7 @@
     var key = trackKey(t);
     curStoryKey = key;
     try {
-      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || "", year: t.albumYear || "", v: "20" }).toString())
+      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || "", year: t.albumYear || "", v: "21" }).toString())
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
           if (key !== curStoryKey || curTab !== "cards") return;
@@ -471,7 +506,7 @@
   }
   // Deeper photos — deliberately DIFFERENT from the first section (shownStoryPhotos are excluded).
   function enrichDeeperMedia(t, wrap) {
-    fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || "", year: t.albumYear || "", v: "20" }).toString())
+    fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || "", year: t.albumYear || "", v: "21" }).toString())
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (curStoryKey !== trackKey(t)) return;
@@ -519,10 +554,11 @@
     if (cached && cached.cards && cached.cards.length) { if (curTab === "cards") renderCards(cached); return; }
     if (curTab === "cards") skeletonCards();
     var url = CFG.API_BASE + "/deepdive?" + new URLSearchParams({ id: track.id || "", title: track.title || "", artist: track.artist || "" }).toString();
+    var attempt = async function () { var res = await fetch(url); if (!res.ok) throw new Error("api " + res.status); return await res.json(); };
     try {
-      var res = await fetch(url);
-      if (!res.ok) throw new Error("api " + res.status);
-      var data = await res.json();
+      var data;
+      try { data = await attempt(); }
+      catch (e1) { await new Promise(function (r) { setTimeout(r, 1500); }); if (mine !== loadSeq) return; data = await attempt(); } // one retry: recover from transient AI/cold-start failures
       if (mine !== loadSeq) return;
       if (curTab === "cards") renderCards(data);
       if (isAi(data)) cacheSet(track, data);
@@ -537,7 +573,7 @@
     if (!track) { notePanel("Play or search a song first to see the artist’s media."); return; }
     panel.innerHTML = '<div class="soon"><p>Gathering photos and album art…</p></div>';
     try {
-      var res = await fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: track.artist || "", title: track.title || "", album: track.album || "", year: track.albumYear || "", v: "20" }).toString());
+      var res = await fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: track.artist || "", title: track.title || "", album: track.album || "", year: track.albumYear || "", v: "21" }).toString());
       if (!res.ok) throw 0;
       var d = await res.json();
       var items = (d && d.items) || [];
@@ -856,6 +892,8 @@
       if (track) setModeButtons(track.shuffle, track.repeat); // reflect real shuffle/repeat every poll
       if (track && track.id && track.id !== lastPlayingId) {
         lastPlayingId = track.id; manualMode = false; cur = track;
+        refreshLike(track.id);
+        try { window.scrollTo({ top: 0, behavior: "auto" }); } catch (e) { window.scrollTo(0, 0); } // new song -> back to the top (don't leave the reader on a stale/blank scroll)
         pstate = { progressMs: track.progressMs || 0, durationMs: track.durationMs || 0, playing: !!track.isPlaying, at: Date.now() };
         playing = !!track.isPlaying; setPlayIcon(playing); tickProgress();
         setHero(track); updateShareLink(track); updateLightboxLive(track);
@@ -880,6 +918,7 @@
     if (AMm && AMm.isAuthorized && AMm.isAuthorized()) { try { AMm.playQuery(artist ? (title + " " + artist) : title); } catch (e) {} }
     manualMode = true;
     cur = { id: "", title: title, artist: artist || "", art: art || "" };
+    refreshLike("");
     setHero(cur); updateShareLink(cur);
     pstate = { progressMs: 0, durationMs: 0, playing: false, at: Date.now() }; setProgress(0, 0); setPlayIcon(false);
     setActiveTab("cards");
@@ -1075,6 +1114,7 @@
     $("gk-next").addEventListener("click", function () { transport("next"); this.blur(); });
     $("gk-shuffle") && $("gk-shuffle").addEventListener("click", function () { transport("shuffle"); this.blur(); });
     $("gk-repeat") && $("gk-repeat").addEventListener("click", function () { transport("repeat"); this.blur(); });
+    $("gk-like") && $("gk-like").addEventListener("click", function () { toggleLike(); this.blur(); });
 
     // cover + lightbox
     $("gk-cover").addEventListener("click", function () { openLightbox(cur && cur.art, cur && cur.title, cur && cur.artist); });
@@ -1084,6 +1124,7 @@
     [["gk-lb-play", "toggle"], ["gk-lb-prev", "prev"], ["gk-lb-next", "next"], ["gk-lb-shuffle", "shuffle"], ["gk-lb-repeat", "repeat"]].forEach(function (p) {
       var el = $(p[0]); if (el) el.addEventListener("click", function (e) { e.stopPropagation(); if (p[1] === "toggle") playPause(); else transport(p[1]); });
     });
+    $("gk-lb-like") && $("gk-lb-like").addEventListener("click", function (e) { e.stopPropagation(); toggleLike(); });
 
     // shared ui hooks for Apple Music provider
     window.SDD.ui = {

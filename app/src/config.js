@@ -9,8 +9,9 @@ window.SDD_CONFIG = {
   // Auto-detects localhost vs production; override if your paths differ.
   REDIRECT_URI: window.location.origin + "/",
 
-  // Scopes: read what you're listening to + control playback (play/pause/skip) from the player.
-  SCOPES: ["user-read-currently-playing", "user-read-playback-state", "user-modify-playback-state", "streaming"],
+  // Scopes: read what you're listening to + control playback (play/pause/skip) from the player,
+  // and save/remove tracks to the user's Spotify Liked Songs (the heart button).
+  SCOPES: ["user-read-currently-playing", "user-read-playback-state", "user-modify-playback-state", "streaming", "user-library-read", "user-library-modify"],
 
   // How often (ms) to poll Spotify for the current track.
   POLL_MS: 4000,

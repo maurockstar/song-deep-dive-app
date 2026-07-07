@@ -116,6 +116,11 @@
   .t-btn-muted{background:none;border:none;color:var(--dim);cursor:pointer;padding:4px;display:inline-flex;transition:color .15s}
   @media (hover:hover){.t-btn-muted:hover{color:var(--muted)}}
   .t-btn-muted.on{color:var(--sun)}
+  /* like / save-to-Liked-Songs heart: outline by default, filled + accent when saved */
+  .t-like.on{color:var(--sun)}
+  .t-like.on svg{fill:currentColor}
+  .t-like.pop{animation:likepop .34s ease}
+  @keyframes likepop{0%{transform:scale(1)}40%{transform:scale(1.32)}100%{transform:scale(1)}}
   #gk-repeat,#gk-lb-repeat{position:relative}
   #gk-repeat.one::after,#gk-lb-repeat.one::after{content:"1";position:absolute;top:-3px;right:-3px;font-size:9px;font-weight:800;line-height:1;color:var(--sun)}
   .play-btn{width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(180deg,var(--sun-300),var(--sun-500));box-shadow:0 0 22px -6px rgba(var(--glow),.6);display:inline-flex;align-items:center;justify-content:center}
@@ -435,6 +440,9 @@
           <button id="gk-repeat" class="t-btn-muted" aria-label="Repeat">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           </button>
+          <button id="gk-like" class="t-btn-muted t-like" aria-label="Save to Liked Songs" aria-pressed="false" hidden>
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.6l-1.45-1.32C5.4 14.6 2 11.5 2 7.7 2 4.9 4.15 2.8 6.9 2.8c1.55 0 3.05.72 4.05 1.86l1.05 1.2 1.05-1.2A5.38 5.38 0 0 1 17.1 2.8C19.85 2.8 22 4.9 22 7.7c0 3.8-3.4 6.9-8.55 11.6z"/></svg>
+          </button>
         </div>
         <div id="gk-pmsg" class="pmsg"></div>
       </div>
@@ -516,16 +524,19 @@
     <button id="gk-lb-repeat" class="t-btn-muted" aria-label="Repeat">
       <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
     </button>
+    <button id="gk-lb-like" class="t-btn-muted t-like" style="color:var(--ink-hi)" aria-label="Save to Liked Songs" aria-pressed="false" hidden>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.6l-1.45-1.32C5.4 14.6 2 11.5 2 7.7 2 4.9 4.15 2.8 6.9 2.8c1.55 0 3.05.72 4.05 1.86l1.05 1.2 1.05-1.2A5.38 5.38 0 0 1 17.1 2.8C19.85 2.8 22 4.9 22 7.7c0 3.8-3.4 6.9-8.55 11.6z"/></svg>
+    </button>
   </div>
 </div>
 
-<script src="./config.js?v=19"></script>
-<script src="./gate.js?v=19"></script>
-<script src="./log.js?v=19"></script>
-<script src="./i18n.js?v=19"></script>
-<script src="./spotify.js?v=19"></script>
+<script src="./config.js?v=21"></script>
+<script src="./gate.js?v=21"></script>
+<script src="./log.js?v=21"></script>
+<script src="./i18n.js?v=21"></script>
+<script src="./spotify.js?v=21"></script>
 <script src="https://sdk.scdn.co/spotify-player.js" async></script>
-<script src="./applemusic.js?v=19"></script>
-<script src="./app.js?v=19"></script>
+<script src="./applemusic.js?v=21"></script>
+<script src="./app.js?v=21"></script>
 </body>
 </html>
