@@ -68,7 +68,28 @@
   .btn-copy{flex:none;border:1px solid var(--border2);background:var(--card);color:var(--ink);border-radius:10px;padding:0 16px;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px}
 
   /* hero */
-  .hero{border-bottom:1px solid var(--border);padding-bottom:10px}
+  .hero{position:sticky;top:var(--topbar-h,74px);z-index:40;background:rgba(18,10,16,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding-bottom:10px;transition:padding .18s ease}
+  .np-img{transition:width .18s ease,height .18s ease,border-radius .18s ease}
+  .np-title{transition:font-size .18s ease}
+  /* collapsed "mini player" once the page is scrolled — small cover + song/artist + prev/play/next + a thin progress line */
+  .hero.compact{display:flex;align-items:center;gap:12px;padding-top:4px;padding-bottom:9px}
+  .hero.compact .np{flex:1;min-width:0;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;align-items:center;column-gap:10px;text-align:left}
+  .hero.compact .np-cover{grid-row:1/span 2;padding:2px;border-radius:12px}
+  .hero.compact .np-img{width:42px;height:42px;border-radius:9px}
+  .hero.compact .np-expand{display:none}
+  .hero.compact .np-title{grid-column:2;grid-row:1;font-size:15px;margin-top:0;min-width:0;max-width:100%}
+  .hero.compact .np-artist{grid-column:2;grid-row:2;font-size:12px;margin-top:1px;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hero.compact .player{margin:0;flex:0 0 auto}
+  .hero.compact .transport{margin:0;gap:12px}
+  .hero.compact .t-btn-muted{display:none}
+  .hero.compact .t-btn svg{width:22px;height:22px}
+  .hero.compact .play-btn{width:38px;height:38px}
+  .hero.compact .play-btn svg{width:20px;height:20px}
+  .hero.compact .pmsg{display:none}
+  .hero.compact .bar-row{position:absolute;left:0;right:0;bottom:0;gap:0}
+  .hero.compact .bar-row .time{display:none}
+  .hero.compact .track{height:3px;border-radius:0}
+  .hero.compact .handle{display:none}
   .np{display:flex;flex-direction:column;align-items:center;text-align:center}
   .np-cover{padding:4px;border:none;border-radius:20px;background:linear-gradient(160deg,var(--gold),var(--sun-500) 55%,var(--deep));box-shadow:0 8px 22px -10px rgba(var(--glow),.55);cursor:pointer;position:relative;display:inline-block}
   .np-img{width:104px;height:104px;border-radius:15px;border:2px solid var(--bg);box-sizing:border-box;background:linear-gradient(180deg,var(--gold),var(--sun-500)) center/cover no-repeat}
@@ -491,12 +512,12 @@
   </div>
 </div>
 
-<script src="./config.js?v=3"></script>
-<script src="./gate.js?v=3"></script>
-<script src="./log.js?v=3"></script>
-<script src="./i18n.js?v=3"></script>
-<script src="./spotify.js?v=3"></script>
-<script src="./applemusic.js?v=3"></script>
-<script src="./app.js?v=3"></script>
+<script src="./config.js?v=4"></script>
+<script src="./gate.js?v=4"></script>
+<script src="./log.js?v=4"></script>
+<script src="./i18n.js?v=4"></script>
+<script src="./spotify.js?v=4"></script>
+<script src="./applemusic.js?v=4"></script>
+<script src="./app.js?v=4"></script>
 </body>
 </html>

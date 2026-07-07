@@ -844,6 +844,7 @@
     setHero(cur); updateShareLink(cur);
     pstate = { progressMs: 0, durationMs: 0, playing: false, at: Date.now() }; setProgress(0, 0); setPlayIcon(false);
     setActiveTab("cards");
+    setupStickyPlayer();
   }
   var suggestTimer = null, suggestItems = [], activeIdx = -1, sIn, sList;
   function hideSuggest() { if (!sList) return; sList.classList.add("hidden"); sList.innerHTML = ""; suggestItems = []; activeIdx = -1; sIn.setAttribute("aria-expanded", "false"); }
@@ -1038,6 +1039,28 @@
     if (AM && AM.init) { try { AM.init(window.SDD.ui).then(refreshSetup); } catch (e) {} }
   }
 
+  // Keep the top bar + now-playing controls pinned. The full player shows at the top; once the user scrolls,
+  // the hero collapses to a slim bar (small cover + song/artist + prev/play/next + thin progress) locked below
+  // the top bar, so playback is always visible & controllable. Works on mobile + desktop (window scroll).
+  function setupStickyPlayer() {
+    var topbar = document.querySelector(".topbar");
+    var hero = document.querySelector(".hero");
+    if (!hero) return;
+    function setH() { if (topbar) document.documentElement.style.setProperty("--topbar-h", topbar.offsetHeight + "px"); }
+    setH();
+    window.addEventListener("resize", setH);
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return; ticking = true;
+      requestAnimationFrame(function () {
+        var y = window.scrollY || document.documentElement.scrollTop || 0;
+        hero.classList.toggle("compact", y > 36);
+        ticking = false;
+      });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  }
   document.addEventListener("DOMContentLoaded", init);
 })();
 // build: geeek-deeper
