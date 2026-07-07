@@ -167,6 +167,14 @@
   .reco-artist{font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .reco-why{font-size:12px;color:var(--muted);line-height:1.35;margin-top:3px}
   .reco-open{flex:0 0 auto;color:var(--sun);font-size:18px;font-weight:700}
+  /* official video card — clickable thumbnail, opens YT/Vimeo (app on iOS, else web) */
+  .st-video{margin-top:6px}
+  .video-card{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:14px;border:1px solid var(--border);background:#0c0710 center/cover no-repeat;overflow:hidden;text-decoration:none;transition:border-color .2s ease}
+  .video-card::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.02) 55%,rgba(0,0,0,.55))}
+  .video-card:hover{border-color:var(--sun-500)}
+  .video-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-54%);z-index:2;filter:drop-shadow(0 5px 12px rgba(0,0,0,.55));transition:transform .15s ease}
+  .video-card:hover .video-badge{transform:translate(-50%,-54%) scale(1.07)}
+  .video-label{position:absolute;left:13px;bottom:11px;z-index:2;font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.02em;color:#fff;text-shadow:0 1px 5px rgba(0,0,0,.75)}
   .suggest{scrollbar-width:none;-ms-overflow-style:none}
   .dd-scroll::-webkit-scrollbar,.suggest::-webkit-scrollbar{width:0;height:0;background:transparent}
   .dd-body{color:var(--muted);font-size:14px;line-height:1.55;margin:0}

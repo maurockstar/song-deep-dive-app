@@ -104,7 +104,7 @@ async function albums(artist) {
     const key = baseAlbumKey(r.collectionName);
     if (!key || seen[key]) continue;
     seen[key] = 1;
-    out.push({ type: "album", url: hi(r.artworkUrl100, 1400), thumb: hi(r.artworkUrl100, 200), title: r.collectionName });
+    out.push({ type: "album", url: hi(r.artworkUrl100, 1400), thumb: hi(r.artworkUrl100, 200), title: r.collectionName, credit: "Apple Music" });
     if (out.length >= 8) break;
   }
   return out;
@@ -117,7 +117,7 @@ async function songCover(title, artist) {
   const results = (d && d.results) || [];
   const r = results.find(function (x) { const an = nrm(x.artistName || ""); return !pa || !an || an.indexOf(pa) > -1 || pa.indexOf(an) > -1; }) || null;
   if (!r || !r.artworkUrl100) return null;
-  return { type: "album", url: hi(r.artworkUrl100, 1400), thumb: hi(r.artworkUrl100, 200), title: r.collectionName || title };
+  return { type: "album", url: hi(r.artworkUrl100, 1400), thumb: hi(r.artworkUrl100, 200), title: r.collectionName || title, credit: "Apple Music" };
 }
 
 async function deezerPhoto(artist) {
@@ -126,7 +126,7 @@ async function deezerPhoto(artist) {
   const a = d && d.data && d.data[0];
   if (!a || !a.picture_xl) return null;
   if (a.picture_xl.indexOf("/artist//") > -1) return null;
-  return { type: "photo", url: a.picture_xl, thumb: a.picture_medium || a.picture_big || a.picture_xl, title: a.name || artist, w: 1000, h: 1000, yr: null, src: "deezer" };
+  return { type: "photo", url: a.picture_xl, thumb: a.picture_medium || a.picture_big || a.picture_xl, title: a.name || artist, w: 1000, h: 1000, yr: null, src: "deezer", credit: "Deezer" };
 }
 
 const MUSIC_RE = /\b(band|duo|trio|quartet|quintet|sextet|musician|singer|songwriter|rapper|record producer|producer|dj|group|musical|guitarist|drummer|bassist|vocalist|rock|pop|hip[\s-]?hop|metal|jazz|orchestra|ensemble|composer|indie|folk|punk|soul|reggae|electronic|country|blues|rnb|r&b|artist)\b/i;
@@ -153,13 +153,51 @@ async function wdClaim(qid, prop) {
 
 const BAD_FILE = /(logo|cover|album|poster|single|tracklist|setlist|ticket|autograph|signature|font|typeface|wordmark|vinyl|cassette|\bcd\b|artwork|sticker|flyer|\bmap\b|diagram|\bgraph\b|timeline|chart|discograph|\bmembers\b|line[\s_-]?up|infobox|\.svg|award|certificate|plaque|ceremony|tribute|convention|\bcamp\b|\bexpo\b|\bfair\b|exhibition|exhibit|ausstellung|\bmuseum\b|galerie|\bgallery\b|lounge|arkaden|booth|audience|\bcrowd\b|\bfans?\b|microphone|amplifier|projector|\bscreen\b|\bslide\b|presentation|wikipedia|statues?|sculpture|\bbust\b|waxwork|\bwax\b|tussaud|\bmural\b|graffiti|replica|impersonator|cover[\s_-]?band|cosplay|fan[\s_-]?art|fanart|mosaic|monument|memorial|\bgrave\b|headstone|tombstone|crossing|\bzebra\b|billboard|\bbanner\b|\bstamp\b|banknote|\bbook\b|magazine|newspaper|\bcomic\b|painting|drawing|sketch|caricature|cartoon|figurine|\btoy\b|\bmug\b|t[\s_-]?shirt|telegram|\bletter\b|document|manuscript|postcard|envelope|handwritten|typescript|\bmemo\b|receipt|invoice|contract|facsimile|\bfax\b|lyric[\s_-]?sheet)/i;
 const OBJECT_RE = /(compressor|amplifier|\bamp\b|preamp|mixing[\s_-]?(?:desk|board|console)|\bmixer\b|\bconsole\b|equali[sz]er|synthesi[sz]er|\bsynth\b|fairchild|\bneve\b|\bssl\b|turntable|loudspeaker|rack[\s_-]?mount|beardsley|\bsleeve\b|floor[\s_-]?plan|blueprint|schematic|\bmap\b)/i; // studio gear / objects / artwork (not a photo of the people)
+// Content Charter v1.1 (2026-07-07, CEO-approved) — "apolitical by design": no politicians, ceremonies,
+// award galas, or state events in song galleries, regardless of who is pictured. An image is editorial:
+// it must serve the song's feeling, and a Kennedy Center gala is not the blues.
+const POLITICS_RE = /\b(president|vice[\s_-]?president|senator|congress|parliament|prime[\s_-]?minister|chancellor|governor|mayor|white[\s_-]?house|kennedy[\s_-]?center|state[\s_-]?dinner|state[\s_-]?visit|inauguration|election|campaign|politician|political|embassy|summit|nobel|grammy|grammys|brit[\s_-]?awards?|vmas?|hall[\s_-]?of[\s_-]?fame|induction|honou?rs|gala|red[\s_-]?carpet|premiere|press[\s_-]?conference|medal)\b/i;
+// Charter v1.1 "essence-first": live/organic music-making imagery (stage, studio, rehearsal) outranks
+// posed/context shots — the FIRST photo should feel like the music being made.
+const LIVE_RE = /\b(live|concert|konzert|tour|touring|gig|festival|on[\s_-]?stage|stage|perform(?:s|ing|ance|ances)?|in[\s_-]?concert|unplugged|soundcheck|rehearsal|backstage|studio|recording[\s_-]?session)\b/i;
+// Charter v1.1 license compliance: CC BY / CC BY-SA images legally require visible attribution.
+// Build "Author · License" from Commons extmetadata (HTML-stripped); null when unknown.
+function licenseOf(ii) {
+  const em = (ii && ii.extmetadata) || {};
+  const strip = function (h) { return String(h || "").replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim(); };
+  const credit = strip(em.Artist && em.Artist.value).slice(0, 60);
+  const lic = strip(em.LicenseShortName && em.LicenseShortName.value).slice(0, 30);
+  if (!credit && !lic) return null;
+  return (credit || "Wikimedia Commons") + (lic ? " · " + lic : "");
+}
+// Fetch attribution for a single Commons/Wikipedia file (used for the infobox lead / Wikidata P18,
+// which arrive without extmetadata). Accepts a bare filename or a full upload.wikimedia.org URL.
+async function commonsCredit(fileOrUrl) {
+  try {
+    let file = String(fileOrUrl || ""), host = "commons.wikimedia.org";
+    if (!file) return null;
+    if (/^https?:/i.test(file)) {
+      const mWiki = file.match(/\/wikipedia\/([a-z]+)\//);
+      const wiki = (mWiki && mWiki[1]) || "commons";
+      host = wiki === "commons" ? "commons.wikimedia.org" : (wiki + ".wikipedia.org");
+      const parts = file.split("?")[0].split("/");
+      file = (file.indexOf("/thumb/") > -1 && parts.length >= 2) ? parts[parts.length - 2] : parts[parts.length - 1];
+      file = file.replace(/^(?:lossy-page\d+-)?\d+px-/, "");
+      try { file = decodeURIComponent(file); } catch (e) {}
+    }
+    const j = await jget("https://" + host + "/w/api.php?action=query&titles=File:" + encodeURIComponent(file) + "&prop=imageinfo&iiprop=extmetadata&format=json&origin=*", {}, 6000);
+    const pages = (j && j.query && j.query.pages) ? Object.values(j.query.pages) : [];
+    const ii = pages[0] && pages[0].imageinfo && pages[0].imageinfo[0];
+    return licenseOf(ii);
+  } catch (e) { return null; }
+}
 
 // Curated images used on a Wikipedia ARTICLE (real photos of the subject). jpeg + min-size + not near-square
 // (album covers/logos) + not a wrong-context/document file + must name the artist (word-boundary).
 async function articleImages(articleTitle, nameTier, srcTag, max) {
   if (!articleTitle) return [];
   const u = WIKI_API + "?action=query&generator=images&gimlimit=50&titles=" + encodeURIComponent(articleTitle) +
-    "&prop=imageinfo&iiprop=url|size|mime&format=json&origin=*";
+    "&prop=imageinfo&iiprop=url|size|mime|extmetadata&format=json&origin=*";
   const j = await jget(u, {});
   const pages = (j && j.query && j.query.pages) ? Object.values(j.query.pages) : [];
   const out = [];
@@ -170,7 +208,7 @@ async function articleImages(articleTitle, nameTier, srcTag, max) {
     if (Math.abs(ii.width - ii.height) <= Math.max(ii.width, ii.height) * 0.06) continue;
     const file = (p.title || "").replace(/^File:/, "");
     const clean = file.replace(/_/g, " ");
-    if (BAD_FILE.test(file) || OBJECT_RE.test(clean)) continue;
+    if (BAD_FILE.test(file) || OBJECT_RE.test(clean) || POLITICS_RE.test(clean)) continue; // charter v1.1: junk + gear + politics/ceremony all out
     // Keep only photos of the ACT (name in filename) or a NAMED band member (full name present). This drops
     // context images that merely sit in the article (related acts, gear, buildings, places).
     const tier = nameTier ? nameTier(clean) : 0;
@@ -178,7 +216,7 @@ async function articleImages(articleTitle, nameTier, srcTag, max) {
     const host = /\/wikipedia\/commons\//.test(ii.url || "") ? "commons.wikimedia.org" : "en.wikipedia.org";
     const base = "https://" + host + "/wiki/Special:FilePath/" + encodeURIComponent(file);
     const cap = fileCaption(file);
-    out.push({ type: "photo", url: base + "?width=1200", thumb: base + "?width=400", title: cap.slice(0, 60), w: ii.width, h: ii.height, yr: photoYear(cap), named: tier === 0, src: srcTag });
+    out.push({ type: "photo", url: base + "?width=1200", thumb: base + "?width=400", title: cap.slice(0, 60), w: ii.width, h: ii.height, yr: photoYear(cap), named: tier === 0, src: srcTag, credit: licenseOf(ii) });
     if (out.length >= (max || 10)) break;
   }
   return out;
@@ -199,7 +237,7 @@ async function albumArticlePhotos(album, artist, nameTier, max) {
 async function categoryPhotos(cat, nameTier, max) {
   if (!cat) return [];
   const u = COMMONS_API + "?action=query&generator=categorymembers&gcmtitle=Category:" + encodeURIComponent(cat) +
-    "&gcmtype=file&gcmlimit=50&prop=imageinfo&iiprop=url|size|mime&format=json&origin=*";
+    "&gcmtype=file&gcmlimit=50&prop=imageinfo&iiprop=url|size|mime|extmetadata&format=json&origin=*";
   const j = await jget(u, {});
   const pages = (j && j.query && j.query.pages) ? Object.values(j.query.pages) : [];
   const out = [];
@@ -210,11 +248,11 @@ async function categoryPhotos(cat, nameTier, max) {
     if (Math.abs(ii.width - ii.height) <= Math.max(ii.width, ii.height) * 0.06) continue;
     const file = (p.title || "").replace(/^File:/, "");
     const clean = file.replace(/_/g, " ");
-    if (BAD_FILE.test(file) || OBJECT_RE.test(clean)) continue;
+    if (BAD_FILE.test(file) || OBJECT_RE.test(clean) || POLITICS_RE.test(clean)) continue; // charter v1.1: junk + gear + politics/ceremony all out
     const tier = nameTier ? nameTier(clean) : 0;
     if (tier < 0) continue;
     const cap = fileCaption(file);
-    out.push({ type: "photo", url: commonsFilePath(file, 1200), thumb: commonsFilePath(file, 400), title: cap.slice(0, 60), w: ii.width, h: ii.height, yr: photoYear(cap), named: tier === 0, src: "commons-cat" });
+    out.push({ type: "photo", url: commonsFilePath(file, 1200), thumb: commonsFilePath(file, 400), title: cap.slice(0, 60), w: ii.width, h: ii.height, yr: photoYear(cap), named: tier === 0, src: "commons-cat", credit: licenseOf(ii) });
     if (out.length >= (max || 10)) break;
   }
   return out;
@@ -304,7 +342,13 @@ function makeNameTier(artist, members) {
   const memberRes = (members || []).map(function (words) {
     return words.map(function (w) { return new RegExp("\\b" + esc(w) + "\\b", "i"); });
   });
+  // For a SOLO act (no listed band members) whose name has no connector, REJECT "<name> and/with <Other Full
+  // Name>" photos: those are ambiguous two-person shots where the "artist" could be a same-named DIFFERENT
+  // person (identity/legal risk, e.g. a namesake "Richard Hawley and Norma Waterson"). Bands & duos keep them.
+  const applyCo = !(members && members.length) && !/(?:\band\b|\bwith\b|\bfeat\b|\bfeaturing\b|&|\+)/i.test(String(artist || ""));
+  const CO = /\b(?:and|with|feat\.?|featuring|ft\.?|meets|versus|vs|und|avec|et|&)\b\s+[A-Z\u00C0-\u00DE][a-z\u00E0-\u00FF.'\u2019-]+(?:\s+[A-Z\u00C0-\u00DE][a-z\u00E0-\u00FF.'\u2019-]+)+/;
   return function (clean) {
+    if (applyCo && CO.test(clean)) return -1;
     if (artRe && artRe.test(clean)) return 0;
     for (let i = 0; i < memberRes.length; i++) {
       const res = memberRes[i];
@@ -336,19 +380,22 @@ module.exports = async function (context, req) {
   const nameTier = makeNameTier(artist, members); // full artist string keeps collaborators; members whitelist solo shots
   const albumPhotos = await albumArticlePhotos(album, artist, nameTier, 8);
 
-  let leadInfobox = null, artPhotos = [], catPhotos = [];
+  let leadInfobox = null, artPhotos = [], catPhotos = [], leadCreditRef = null;
   if (mw) {
     if (mw.image && mw.w >= 600) {
       leadInfobox = { type: "photo", url: wikiImg(mw.image, 1400), thumb: wikiImg(mw.image, 400), title: artist, w: mw.w, h: mw.h, yr: null, src: "wikipedia" };
+      leadCreditRef = mw.image;
     }
     artPhotos = await articleImages(mw.title, nameTier, "wikipedia-article", 12);
     if (!artPhotos.length && mw.title) artPhotos = await articleImages(mw.title, nameTier, "wikipedia-article", 12); // one retry (cold Wikipedia can be slow)
     if (mw.qid) {
       const [cat, p18] = await Promise.all([wdClaim(mw.qid, "P373"), leadInfobox ? Promise.resolve(null) : wdClaim(mw.qid, "P18")]);
-      if (!leadInfobox && p18) leadInfobox = { type: "photo", url: commonsFilePath(p18, 1400), thumb: commonsFilePath(p18, 400), title: artist, w: 1000, h: 1000, yr: null, src: "wikidata-p18" };
+      if (!leadInfobox && p18) { leadInfobox = { type: "photo", url: commonsFilePath(p18, 1400), thumb: commonsFilePath(p18, 400), title: artist, w: 1000, h: 1000, yr: null, src: "wikidata-p18" }; leadCreditRef = p18; }
       if (cat) catPhotos = await categoryPhotos(cat, nameTier, 12);
     }
   }
+  // Charter v1.1 license compliance: the infobox/P18 lead arrives without extmetadata — fetch its credit.
+  if (leadInfobox && leadCreditRef) leadInfobox.credit = await commonsCredit(leadCreditRef);
 
   // Album-article photos are era-correct by context — if undated in the filename, treat them as the album era.
   albumPhotos.forEach(function (p) { if (!p.yr && eraYear) p.yr = eraYear; });

@@ -17,11 +17,12 @@ const A = require("../shared/auth");
 const MB_BASE = "https://musicbrainz.org/ws/2";
 const MB_UA = "geeek/1.0 (https://geeek.fm)";
 const WIKI = "https://en.wikipedia.org/api/rest_v1/page/summary/";
+const WIKI_API = "https://en.wikipedia.org/w/api.php";
 const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "1.7"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "1.8"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -39,7 +40,8 @@ async function jget(url, headers, ms) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms || 8000);
   try {
-    const r = await fetch(url, { headers: headers || {}, signal: ctrl.signal });
+    const h = Object.assign({ "User-Agent": "geeek/1.0 (https://geeek.fm; deeper)" }, headers || {});
+    const r = await fetch(url, { headers: h, signal: ctrl.signal });
     if (!r.ok) return null;
     return await r.json();
   } catch (e) { return null; } finally { clearTimeout(timer); }
@@ -106,6 +108,54 @@ async function wikiSummary(candidates) {
     if (s && s.extract && s.type !== "disambiguation") return s.extract.trim();
   }
   return "";
+}
+
+// The song's OFFICIAL video (YouTube/Vimeo), keyless: the song's Wikipedia "External links" -> first
+// YouTube/Vimeo link -> oEmbed to confirm it exists, get the real thumbnail + channel. We ONLY return it
+// when the channel/title looks official (VEVO / "Official" / the artist) - otherwise null (show nothing).
+async function officialVideo(title, artist) {
+  const pa = primaryArtist(artist);
+  const cands = pa ? [title + " (" + pa + " song)", title + " (song)", title] : [title + " (song)", title];
+  let articleTitle = "";
+  for (const c of cands) {
+    const s = await jget(WIKI + encodeURIComponent(c) + "?redirect=true", {});
+    if (s && s.title && s.type !== "disambiguation") { articleTitle = s.title; break; }
+  }
+  if (!articleTitle) return null;
+  const j = await jget(WIKI_API + "?action=query&prop=extlinks&ellimit=500&titles=" + encodeURIComponent(articleTitle) + "&format=json&origin=*", {});
+  const pages = (j && j.query && j.query.pages) ? Object.values(j.query.pages) : [];
+  const links = ((pages[0] && pages[0].extlinks) || []).map(function (x) { return x["*"] || x; }).filter(Boolean);
+  const ytIds = [], vimIds = [];
+  for (const l of links) {
+    if (/web\.archive\.org/i.test(l)) continue;
+    const m = l.match(/[?&]v=([A-Za-z0-9_-]{11})/) || l.match(/youtu\.be\/([A-Za-z0-9_-]{11})/);
+    if (m) { if (ytIds.indexOf(m[1]) === -1) ytIds.push(m[1]); continue; }
+    const vm = l.match(/vimeo\.com\/(\d{6,})/);
+    if (vm) { if (vimIds.indexOf(vm[1]) === -1) vimIds.push(vm[1]); }
+  }
+  const paN = norm(pa).replace(/ /g, "");
+  function official(vt, ch) {
+    const t = String(vt || "").toLowerCase(), c = String(ch || "").toLowerCase();
+    if (/vevo/.test(c) || /official/.test(c)) return true;
+    if (paN && norm(c).replace(/ /g, "").indexOf(paN) > -1) return true;
+    if (/official\s*(music\s*)?video/.test(t)) return true;
+    return false;
+  }
+  for (const id of ytIds.slice(0, 6)) {
+    const oe = await jget("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id), {});
+    if (!oe || !oe.title) continue;
+    if (official(oe.title, oe.author_name)) {
+      return { platform: "youtube", id: id, url: "https://www.youtube.com/watch?v=" + id, thumb: oe.thumbnail_url || ("https://i.ytimg.com/vi/" + id + "/hqdefault.jpg"), videoTitle: oe.title, channel: oe.author_name || "" };
+    }
+  }
+  for (const id of vimIds.slice(0, 4)) {
+    const oe = await jget("https://vimeo.com/api/oembed.json?url=" + encodeURIComponent("https://vimeo.com/" + id), {});
+    if (!oe || !oe.title) continue;
+    if (official(oe.title, oe.author_name)) {
+      return { platform: "vimeo", id: id, url: "https://vimeo.com/" + id, thumb: oe.thumbnail_url || "", videoTitle: oe.title, channel: oe.author_name || "" };
+    }
+  }
+  return null;
 }
 
 // Real co-listening candidates (cross-artist) from Last.fm — only when LASTFM_API_KEY is set.
@@ -399,15 +449,17 @@ module.exports = async function (context, req) {
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  const [facts, similarPool] = await Promise.all([
+  const [facts, similarPool, video] = await Promise.all([
     gatherDeepFacts(q.title, q.artist, context, knownAlbum),
-    lastfmSimilar(songTitleBase(q.title).trim(), primaryArtist(q.artist))
+    lastfmSimilar(songTitleBase(q.title).trim(), primaryArtist(q.artist)),
+    officialVideo(q.title, q.artist)
   ]);
 
   let ai = null;
   if (apiKey) ai = await writeDeeperWithClaude(apiKey, facts, seed, similarPool, context);
   const aiUsed = !!(ai && ai.body && ai.body.length);
   const deeper = aiUsed ? ai : templateDeeper(facts, similarPool);
+  deeper.video = video || null; // official YouTube/Vimeo video for the song (or null)
 
   let payload = {
     track: { title: q.title, artist: q.artist },
