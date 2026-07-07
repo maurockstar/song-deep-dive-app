@@ -929,7 +929,14 @@
     if (!S.isConnected()) { showSetup(true); refreshSetup(); return; }
     var ok = false;
     try {
-      if (action === "toggle") { ok = await (playing ? CTRL.pause() : CTRL.play()); if (ok) { playing = !playing; setPlayIcon(playing); pstate.playing = playing; pstate.at = Date.now(); } }
+      if (action === "toggle") {
+        // Read the REAL state first (local `playing` can be up to POLL_MS stale, e.g. right after the user
+        // paused on Spotify), so a single tap always does the right thing (resume vs pause).
+        var _t = await P.getActivePlayer().getCurrentTrack();
+        var _isP = _t ? !!_t.isPlaying : playing;
+        ok = await (_isP ? CTRL.pause() : CTRL.play());
+        if (ok) { playing = !_isP; setPlayIcon(playing); pstate.playing = playing; pstate.at = Date.now(); }
+      }
       else if (action === "next") { ok = await CTRL.next(); }
       else if (action === "prev") { ok = await CTRL.prev(); }
       else if (action === "shuffle") {
@@ -999,11 +1006,11 @@
     $("gk-share-scrim") && $("gk-share-scrim").addEventListener("click", closePanels);
 
     // transport
-    $("gk-playbtn").addEventListener("click", function () { transport("toggle"); });
-    $("gk-prev").addEventListener("click", function () { transport("prev"); });
-    $("gk-next").addEventListener("click", function () { transport("next"); });
-    $("gk-shuffle") && $("gk-shuffle").addEventListener("click", function () { transport("shuffle"); });
-    $("gk-repeat") && $("gk-repeat").addEventListener("click", function () { transport("repeat"); });
+    $("gk-playbtn").addEventListener("click", function () { transport("toggle"); this.blur(); });
+    $("gk-prev").addEventListener("click", function () { transport("prev"); this.blur(); });
+    $("gk-next").addEventListener("click", function () { transport("next"); this.blur(); });
+    $("gk-shuffle") && $("gk-shuffle").addEventListener("click", function () { transport("shuffle"); this.blur(); });
+    $("gk-repeat") && $("gk-repeat").addEventListener("click", function () { transport("repeat"); this.blur(); });
 
     // cover + lightbox
     $("gk-cover").addEventListener("click", function () { openLightbox(cur && cur.art, cur && cur.title, cur && cur.artist); });

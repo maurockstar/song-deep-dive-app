@@ -6,6 +6,7 @@
   var AUTH = "https://accounts.spotify.com/authorize";
   var TOKEN = "https://accounts.spotify.com/api/token";
   var API = "https://api.spotify.com/v1";
+  var activeDeviceId = null; // last-seen Spotify device id, so transport still works after an external pause
   var LS = "sdd_spotify_tokens";
 
   // ---------- PKCE helpers ----------
@@ -131,6 +132,7 @@
       var d = await res.json();
       if (!d || !d.item) return null;
       var it = d.item;
+      if (d.device && d.device.id) activeDeviceId = d.device.id;
       // Keep the local shuffle/repeat mirrors honest so the next in-app toggle/cycle starts from reality.
       shuffleOn = !!d.shuffle_state;
       var ri = repeatModes.indexOf(d.repeat_state); if (ri >= 0) repeatIdx = ri;
@@ -155,8 +157,14 @@
   async function control(method, path) {
     var token = await getAccessToken();
     if (!token) return false;
+    var url = API + path;
+    // Target the last-seen device so play/pause/next/prev still work after Spotify was paused externally
+    // (a paused device stays listed but "inactive"; without device_id, /play 404s "No active device found").
+    if (activeDeviceId && /^\/me\/player\/(play|pause|next|previous)\b/.test(path)) {
+      url += (path.indexOf("?") > -1 ? "&" : "?") + "device_id=" + encodeURIComponent(activeDeviceId);
+    }
     try {
-      var res = await fetch(API + path, { method: method, headers: { Authorization: "Bearer " + token } });
+      var res = await fetch(url, { method: method, headers: { Authorization: "Bearer " + token } });
       return res.ok || res.status === 204;
     } catch (e) { return false; }
   }
