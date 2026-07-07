@@ -139,6 +139,7 @@
         title: it.name,
         artist: (it.artists || []).map(function (a) { return a.name; }).join(", "),
         album: it.album ? it.album.name : "",
+        albumYear: (it.album && it.album.release_date) ? String(it.album.release_date).slice(0, 4) : "",
         art: it.album && it.album.images && it.album.images[0] ? it.album.images[0].url : "",
         isPlaying: !!d.is_playing,
         progressMs: d.progress_ms || 0,
