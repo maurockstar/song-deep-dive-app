@@ -162,6 +162,9 @@
     return { headline: (cards[0] && cards[0].title) || ((cur && cur.title) || "The story"), dek: (cards[0] && cards[0].body) || "", body: body };
   }
   var curStoryKey = "";
+  var shownStoryPhotos = {};              // photo URLs already used in the first story section (so "geeek deeper" uses different pics)
+  var deeperState = { loaded: false, key: "" };
+  function artBaseUrl(u) { return (u || "").replace(/\/[0-9]+x[0-9]+[^\/]*$/, ""); } // ignore iTunes size suffix
   function nrmTxt(x) { return (x || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
   function trackKey(t) { return t ? (nrmTxt(t.artist || "") + "|" + nrmTxt(t.title || "")) : ""; }
   // Album title reduced to a stable base so "Rain Tree Crow (Remastered 2019)" == "Rain Tree Crow".
@@ -209,6 +212,7 @@
           items.forEach(function (it) { if (it && it.type === "photo") add(it); }); // hi-res artist photos first (never a cover)
           items.forEach(function (it) { if (it && it.type !== "photo") add(it); }); // then other album covers (excluding the now-playing one)
           imgs = imgs.slice(0, 3);
+          imgs.forEach(function (mm) { shownStoryPhotos[mm.url] = 1; }); // reserve these so "geeek deeper" shows different pics
           if (!imgs.length) return;
           imgs.forEach(function (mm, idx) {
             var el = new Image();
@@ -263,16 +267,116 @@
     var body0 = (story.body && story.body[0] && story.body[0].text) || "";
     var dN = nrmTxt(dek), bN = nrmTxt(body0);
     if (dN && bN && (dN === bN || dN.indexOf(bN) > -1 || bN.indexOf(dN) > -1)) dek = "";
+    shownStoryPhotos = {};                       // fresh per song
+    deeperState = { loaded: false, key: curStoryKey };
     panel.innerHTML = '<article class="st-read">'
       + '<div class="st-lead" id="st-lead"></div>'
       + '<div class="st-kicker">The story</div>'
       + '<h2 class="st-headline">' + esc(story.headline || "") + '</h2>'
       + (dek ? '<p class="st-dek">' + esc(dek) + '</p>' : '')
       + '<div class="st-body">' + storyBlocksHtml(story.body, [story.headline, dek]) + '</div>'
+      + '<div class="st-deeper-wrap"><button class="st-deeper-btn" id="st-deeper-btn" type="button"><span class="lbl">geeek deeper</span><span class="chev" aria-hidden="true">▾</span></button></div>'
+      + '<div class="st-deeper hidden" id="st-deeper"></div>'
       + '</article>';
     enrichStoryRetry(payload, 5);
   }
   function renderCards(payload) { renderStory(payload); }
+
+  // ---------- "geeek deeper": a second, richer layer under the story ----------
+  function deeperBlocksHtml(blocks) {
+    var h = "", arr = blocks || [], seen = {};
+    for (var i = 0; i < arr.length; i++) {
+      var b = arr[i]; if (!b || !b.text) continue;
+      if (b.type === "h") { h += '<h3 class="st-dh">' + esc(b.text) + '</h3>'; continue; }
+      var k = nrmTxt(b.text); if (!k || seen[k]) continue; seen[k] = 1;
+      if (b.type === "quote") h += '<blockquote class="st-quote">' + esc(b.text) + '</blockquote>';
+      else h += '<p class="st-p">' + esc(b.text) + '</p>';
+    }
+    return h;
+  }
+  function toggleDeeper() {
+    var wrap = panel.querySelector("#st-deeper");
+    var btn = panel.querySelector("#st-deeper-btn");
+    if (!wrap) return;
+    if (deeperState.loaded && wrap.getAttribute("data-key") === curStoryKey) {
+      var hidden = wrap.classList.toggle("hidden");
+      if (btn) { btn.classList.toggle("open", !hidden); var l = btn.querySelector(".lbl"); if (l) l.textContent = hidden ? "geeek deeper" : "show less"; }
+      return;
+    }
+    loadDeeper();
+  }
+  function loadDeeper() {
+    var t = cur; if (!t || !t.title) return;
+    var wrap = panel.querySelector("#st-deeper");
+    var btn = panel.querySelector("#st-deeper-btn");
+    if (!wrap) return;
+    var myKey = trackKey(t);
+    wrap.classList.remove("hidden");
+    wrap.setAttribute("data-key", myKey);
+    wrap.innerHTML = '<div class="st-deeper-note">Digging deeper…</div>';
+    if (btn) btn.classList.add("loading");
+    fetch(CFG.API_BASE + "/deeper?" + new URLSearchParams({ title: t.title || "", artist: t.artist || "" }).toString())
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (curStoryKey !== myKey) return;
+        var deeper = d && d.deeper;
+        if (!deeper || !deeper.body || !deeper.body.length) {
+          wrap.innerHTML = '<div class="st-deeper-note">More on this one is coming soon.</div>';
+          if (btn) btn.classList.remove("loading");
+          return;
+        }
+        wrap.innerHTML = deeperBlocksHtml(deeper.body);
+        deeperState.loaded = true; deeperState.key = myKey;
+        if (btn) { btn.classList.remove("loading"); btn.classList.add("open"); var l = btn.querySelector(".lbl"); if (l) l.textContent = "show less"; }
+        enrichDeeperMedia(t, wrap);
+      })
+      .catch(function () {
+        wrap.innerHTML = '<div class="st-deeper-note">Couldn’t load the deeper story right now.</div>';
+        if (btn) btn.classList.remove("loading");
+      });
+  }
+  // Deeper photos — deliberately DIFFERENT from the first section (shownStoryPhotos are excluded).
+  function enrichDeeperMedia(t, wrap) {
+    fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", v: "9" }).toString())
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (curStoryKey !== trackKey(t)) return;
+        var items = (d && d.items) || [];
+        var seen = {}, imgs = [];
+        function add(it) {
+          if (!it) return;
+          var url = it.url || it.thumb; if (!url) return;
+          if (it.type === "photo" && it.w && it.w < 600) return;
+          if (shownStoryPhotos[url]) return;                 // not already shown up top
+          var base = artBaseUrl(url); if (seen[base]) return; seen[base] = 1;
+          imgs.push({ url: url, cap: it.title || t.artist || "" });
+        }
+        items.forEach(function (it) { if (it && it.type === "photo") add(it); }); // real photos first
+        items.forEach(function (it) { if (it && it.type !== "photo") add(it); });  // then album art
+        imgs = imgs.slice(0, 4);
+        if (!imgs.length) return;
+        var heads = wrap.querySelectorAll("h3.st-dh");
+        imgs.forEach(function (mm, idx) {
+          var el = new Image();
+          el.className = "st-media-img"; el.decoding = "async"; el.alt = mm.cap || ""; el.style.cursor = "zoom-in";
+          el.addEventListener("click", function () { openStoryPhoto(mm.url, mm.cap || ""); });
+          el.onerror = function () {};
+          el.onload = function () {
+            if (curStoryKey !== trackKey(t)) return;
+            var existing = wrap.querySelectorAll("img.st-media-img");
+            for (var z = 0; z < existing.length; z++) { if (existing[z] !== el && existing[z].src === el.src) return; }
+            var fig = document.createElement("figure"); fig.className = "st-media"; fig.appendChild(el);
+            var cap = document.createElement("figcaption"); cap.textContent = mm.cap || ""; fig.appendChild(cap);
+            var ref = heads[idx + 1] || null;                 // place before the next section heading when possible
+            if (ref && ref.parentNode === wrap) wrap.insertBefore(fig, ref);
+            else wrap.appendChild(fig);
+          };
+          el.src = mm.url;
+        });
+      })
+      .catch(function () {});
+  }
+
   async function loadDeepDive(track) {
     if (!track) { welcome(); return; }
     var mine = ++loadSeq;
@@ -766,6 +870,7 @@
       var nx = e.target.closest(".tq-next"); if (nx) { if (TQ.i >= TQ.list.length - 1) triviaResults(); else { TQ.i++; renderQuestion(); } return; }
       var ag = e.target.closest(".tv-again"); if (ag) { resetTrivia(); renderTrivia("mode"); return; }
       var mt = e.target.closest(".mtile"); if (mt) { openStoryPhoto(mt.getAttribute("data-full"), mt.getAttribute("data-cap")); return; } // plain image viewer — no playback, not overwritten by the poll
+      var gdp = e.target.closest("#st-deeper-btn"); if (gdp) { toggleDeeper(); return; }
       var dd = e.target.closest("#ff-deeper"); if (dd) { diveDeeper(); return; }
       var sz = e.target.closest("#gk-shz-btn"); if (sz) { shazamDemo(); return; }
     });
@@ -833,3 +938,4 @@
 
   document.addEventListener("DOMContentLoaded", init);
 })();
+// build: geeek-deeper
