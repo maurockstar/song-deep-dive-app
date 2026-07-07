@@ -144,6 +144,7 @@ async function wdClaim(qid, prop) {
 }
 
 const BAD_FILE = /(logo|cover|album|poster|single|tracklist|setlist|ticket|autograph|signature|font|typeface|wordmark|vinyl|cassette|\bcd\b|artwork|sticker|flyer|\bmap\b|diagram|\bgraph\b|timeline|chart|discograph|\bmembers\b|line[\s_-]?up|infobox|\.svg|award|certificate|plaque|ceremony|tribute|convention|\bcamp\b|\bexpo\b|\bfair\b|exhibition|exhibit|ausstellung|\bmuseum\b|galerie|\bgallery\b|lounge|arkaden|booth|audience|\bcrowd\b|\bfans?\b|microphone|amplifier|projector|\bscreen\b|\bslide\b|presentation|wikipedia|statues?|sculpture|\bbust\b|waxwork|\bwax\b|tussaud|\bmural\b|graffiti|replica|impersonator|cover[\s_-]?band|cosplay|fan[\s_-]?art|fanart|mosaic|monument|memorial|\bgrave\b|headstone|tombstone|crossing|\bzebra\b|billboard|\bbanner\b|\bstamp\b|banknote|\bbook\b|magazine|newspaper|\bcomic\b|painting|drawing|sketch|caricature|cartoon|figurine|\btoy\b|\bmug\b|t[\s_-]?shirt|telegram|\bletter\b|document|manuscript|postcard|envelope|handwritten|typescript|\bmemo\b|receipt|invoice|contract|facsimile|\bfax\b|lyric[\s_-]?sheet)/i;
+const OBJECT_RE = /(compressor|amplifier|\bamp\b|preamp|mixing[\s_-]?(?:desk|board|console)|\bmixer\b|\bconsole\b|equali[sz]er|synthesi[sz]er|\bsynth\b|fairchild|\bneve\b|\bssl\b|turntable|loudspeaker|rack[\s_-]?mount|beardsley|\bsleeve\b|floor[\s_-]?plan|blueprint|schematic|\bmap\b)/i; // studio gear / objects / artwork (not a photo of the people)
 
 // Curated images used on a Wikipedia ARTICLE (real photos of the subject). jpeg + min-size + not near-square
 // (album covers/logos) + not a wrong-context/document file + must name the artist (word-boundary).
@@ -161,12 +162,16 @@ async function articleImages(articleTitle, artist, srcTag, max) {
     if (!(ii.width >= 600 && ii.height >= 400)) continue;
     if (Math.abs(ii.width - ii.height) <= Math.max(ii.width, ii.height) * 0.06) continue;
     const file = (p.title || "").replace(/^File:/, "");
-    if (BAD_FILE.test(file)) continue;
-    if (re && !re.test(file.replace(/_/g, " "))) continue;
+    const clean = file.replace(/_/g, " ");
+    if (BAD_FILE.test(file) || OBJECT_RE.test(clean)) continue;
+    // Article images are editor-curated to depict the subject, so we KEEP them even if the filename does
+    // not contain the artist name (band members, frontman, collaborators). We flag whether it does so
+    // name-matched band photos can be ranked first for the lead.
+    const named = re ? re.test(clean) : true;
     const host = /\/wikipedia\/commons\//.test(ii.url || "") ? "commons.wikimedia.org" : "en.wikipedia.org";
     const base = "https://" + host + "/wiki/Special:FilePath/" + encodeURIComponent(file);
     const cap = fileCaption(file);
-    out.push({ type: "photo", url: base + "?width=1200", thumb: base + "?width=400", title: cap.slice(0, 60), w: ii.width, h: ii.height, yr: photoYear(cap), src: srcTag });
+    out.push({ type: "photo", url: base + "?width=1200", thumb: base + "?width=400", title: cap.slice(0, 60), w: ii.width, h: ii.height, yr: photoYear(cap), named: named, src: srcTag });
     if (out.length >= (max || 10)) break;
   }
   return out;
@@ -242,31 +247,36 @@ module.exports = async function (context, req) {
   // Album-article photos are era-correct by context — if undated in the filename, treat them as the album era.
   albumPhotos.forEach(function (p) { if (!p.yr && eraYear) p.yr = eraYear; });
 
-  // Build the era-ranked photo pool. Priority: album-article -> infobox/article -> category.
+  // Build the photo pool. Two tiers: tier 0 = confirmed band photos (filename names the artist, or the
+  // infobox/deezer artist image); tier 1 = other curated article images (band members, frontman,
+  // collaborators, era/mood context). The LEAD is the era-closest TIER-0 photo, so it's always the band in
+  // the right era; tier-1 photos enrich the later slots. This keeps well-documented acts photo-rich while
+  // never letting a non-band context photo lead.
+  if (leadInfobox) { leadInfobox.named = true; }
   const pool = [];
-  function pushPool(p, pri) { if (!p) return; p._pri = pri; pool.push(p); }
-  albumPhotos.forEach(function (p) { pushPool(p, 0); });
-  pushPool(leadInfobox, 1);
-  artPhotos.forEach(function (p) { pushPool(p, 1); });
-  catPhotos.forEach(function (p) { pushPool(p, 2); });
-  // Deezer only as a last resort when we found NO verified photo AND the name matches.
+  function pushPool(p) { if (!p) return; if (p._tier === undefined) p._tier = p.named ? 0 : 1; pool.push(p); }
+  albumPhotos.forEach(pushPool);
+  pushPool(leadInfobox);
+  artPhotos.forEach(pushPool);
+  catPhotos.forEach(pushPool);
+  // Deezer only as a last resort when we found NO photo at all AND the name matches.
   if (!pool.length && dzPhoto) {
-    const re = artistNameRe(artist);
-    if (re && re.test(dzPhoto.title || "")) pushPool(dzPhoto, 3);
+    const re2 = artistNameRe(artist);
+    if (re2 && re2.test(dzPhoto.title || "")) { dzPhoto.named = true; pushPool(dzPhoto); }
   }
 
   // Era distance (the FIRST photo should be closest to the album's era). Undated sinks below dated when we
-  // know the era; when we don't, era is neutral and we fall back to source-priority + resolution.
+  // know the era; when we don't, era is neutral and we fall back to tier + resolution.
   pool.forEach(function (p) {
     p._dist = eraYear ? (p.yr ? Math.abs(p.yr - eraYear) : 9999) : 0;
   });
   pool.sort(function (a, b) {
-    return (a._dist - b._dist) || (a._pri - b._pri) || ((b.w * b.h) - (a.w * a.h));
+    return (a._tier - b._tier) || (a._dist - b._dist) || ((b.w * b.h) - (a.w * a.h));
   });
 
   const items = [];
   const seenUrl = {};
-  function add(it) { if (!it) return; var k = photoId(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; delete it._pri; delete it._dist; items.push(it); }
+  function add(it) { if (!it) return; var k = photoId(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; delete it._tier; delete it._dist; delete it.named; items.push(it); }
 
   pool.forEach(add);           // era-ranked, official, on-topic photos (lead reflects the album era)
   add(cover);                  // now-playing album cover (gallery)
