@@ -242,7 +242,7 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     `]}}`;
   const body = { model: ANTHROPIC_MODEL, max_tokens: 2000, system, messages: [{ role: "user", content: user }] };
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 24000);
+  const timer = setTimeout(() => ctrl.abort(), 30000);
   try {
     const r = await fetch(ANTHROPIC_URL, {
       method: "POST",
