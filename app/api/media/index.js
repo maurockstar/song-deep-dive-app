@@ -136,7 +136,7 @@ async function wdClaim(qid, prop) {
   return (typeof v === "string") ? v : null;
 }
 
-const BAD_FILE = /(logo|cover|album|poster|single|tracklist|setlist|ticket|autograph|signature|font|typeface|wordmark|vinyl|cd|cassette|artwork|sticker|flyer|map|diagram|\bgraph\b|timeline|chart|discograph|\bmembers\b|line[\s-]?up|infobox|\.svg|award|certificate|plaque|ceremony)/i;
+const BAD_FILE = /(logo|cover|album|poster|single|tracklist|setlist|ticket|autograph|signature|font|typeface|wordmark|vinyl|cassette|\bcd\b|artwork|sticker|flyer|\bmap\b|diagram|\bgraph\b|timeline|chart|discograph|\bmembers\b|line[\s_-]?up|infobox|\.svg|award|certificate|plaque|ceremony|tribute|convention|\bcamp\b|\bexpo\b|\bfair\b|exhibition|exhibit|ausstellung|\bmuseum\b|galerie|\bgallery\b|lounge|arkaden|booth|audience|\bcrowd\b|projector|\bscreen\b|\bslide\b|presentation|wikipedia|\bstatue\b|sculpture|\bbust\b|waxwork|\bwax\b|tussaud|\bmural\b|graffiti|replica|impersonator|cover[\s_-]?band|cosplay|fan[\s_-]?art|fanart|mosaic|monument|memorial|\bgrave\b|headstone|tombstone|crossing|\bzebra\b|billboard|\bbanner\b|\bstamp\b|banknote|\bbook\b|magazine|newspaper|\bcomic\b|painting|drawing|sketch|caricature|cartoon|figurine|\btoy\b|\bmug\b|t[\s_-]?shirt)/i;
 // Verified photos = files in the artist's Wikidata Commons category (P373). Curated -> about THIS artist.
 // We ALSO require the filename to reference the artist/category name, which drops the odd non-artist file
 // that sits in the category (a venue, a plaque, a magazine) — so kept photos actually depict the artist.
@@ -152,11 +152,40 @@ async function categoryPhotos(cat, nameKeys, max) {
     const ii = (p.imageinfo && p.imageinfo[0]) || null;
     if (!ii || !/jpe?g/i.test(ii.mime || "")) continue;
     if (!(ii.width >= 600 && ii.height >= 400)) continue;
+    if (Math.abs(ii.width - ii.height) <= Math.max(ii.width, ii.height) * 0.06) continue; // skip near-square (album covers / logos)
     const file = (p.title || "").replace(/^File:/, "");
     if (BAD_FILE.test(file)) continue;
     if (keys.length && !keys.some(function (k) { return nrm(file).indexOf(k) > -1; })) continue;  // must name the artist
     const cap = file.replace(/\.[a-z0-9]+$/i, "").replace(/_/g, " ").replace(/\s*@\s*/g, " at ").replace(/\(\s*[\d ]+\s*\)/g, "").replace(/\s+/g, " ").trim();
     out.push({ type: "photo", url: commonsFilePath(file, 1200), thumb: commonsFilePath(file, 400), title: cap.slice(0, 60), w: ii.width, h: ii.height, src: "commons-cat" });
+    if (out.length >= (max || 8)) break;
+  }
+  return out;
+}
+
+// Curated, on-topic photos from the artist's Wikipedia ARTICLE. Editors chose these images to depict the
+// subject, so they are the most "official" source and far less likely to be an off-topic event/exhibition/
+// slide/tribute file than the raw Commons category. jpeg + min-size + BAD_FILE + must reference the artist.
+async function articlePhotos(articleTitle, nameKeys, max) {
+  if (!articleTitle) return [];
+  const keys = (nameKeys || []).filter(Boolean);
+  const u = "https://en.wikipedia.org/w/api.php?action=query&generator=images&gimlimit=40&titles=" +
+    encodeURIComponent(articleTitle) + "&prop=imageinfo&iiprop=url|size|mime&format=json&origin=*";
+  const j = await jget(u, {});
+  const pages = (j && j.query && j.query.pages) ? Object.values(j.query.pages) : [];
+  const out = [];
+  for (const p of pages) {
+    const ii = (p.imageinfo && p.imageinfo[0]) || null;
+    if (!ii || !/jpe?g/i.test(ii.mime || "")) continue;
+    if (!(ii.width >= 600 && ii.height >= 400)) continue;
+    if (Math.abs(ii.width - ii.height) <= Math.max(ii.width, ii.height) * 0.06) continue; // skip near-square (album covers / logos)
+    const file = (p.title || "").replace(/^File:/, "");
+    if (BAD_FILE.test(file)) continue;
+    if (keys.length && !keys.some(function (k) { return nrm(file).indexOf(k) > -1; })) continue;
+    const host = /\/wikipedia\/commons\//.test(ii.url || "") ? "commons.wikimedia.org" : "en.wikipedia.org";
+    const base = "https://" + host + "/wiki/Special:FilePath/" + encodeURIComponent(file);
+    const cap = file.replace(/\.[a-z0-9]+$/i, "").replace(/_/g, " ").replace(/\s*@\s*/g, " at ").replace(/\(\s*[\d ]+\s*\)/g, "").replace(/\s+/g, " ").trim();
+    out.push({ type: "photo", url: base + "?width=1200", thumb: base + "?width=400", title: cap.slice(0, 60), w: ii.width, h: ii.height, src: "wikipedia-article" });
     if (out.length >= (max || 8)) break;
   }
   return out;
@@ -176,12 +205,14 @@ module.exports = async function (context, req) {
     musicWiki(artist), deezerPhoto(artist), songCover(title, artist), albums(artist)
   ]);
 
-  // Verified photos: the article infobox (lead) + the artist's Wikidata Commons category.
-  let leadPhoto = null, catPhotos = [];
+  // Verified photos, most-official first: article infobox (lead) -> curated Wikipedia ARTICLE images ->
+  // the artist's Wikidata Commons category (now heavily context-filtered).
+  let leadPhoto = null, artPhotos = [], catPhotos = [];
   if (mw) {
     if (mw.image && mw.w >= 600) {
       leadPhoto = { type: "photo", url: wikiImg(mw.image, 1400), thumb: wikiImg(mw.image, 400), title: artist, w: mw.w, h: mw.h, src: "wikipedia" };
     }
+    artPhotos = await articlePhotos(mw.title, [nrm(primaryArtist(artist)), nrm(mw.title)], 10);
     if (mw.qid) {
       const [cat, p18] = await Promise.all([wdClaim(mw.qid, "P373"), leadPhoto ? Promise.resolve(null) : wdClaim(mw.qid, "P18")]);
       if (!leadPhoto && p18) leadPhoto = { type: "photo", url: commonsFilePath(p18, 1400), thumb: commonsFilePath(p18, 400), title: artist, w: 1000, h: 1000, src: "wikidata-p18" };
@@ -198,8 +229,9 @@ module.exports = async function (context, req) {
   const seenUrl = {};
   function add(it) { if (!it) return; var k = photoId(it.url || ""); if (!k || seenUrl[k]) return; seenUrl[k] = 1; items.push(it); }
 
-  add(leadPhoto);              // 1) verified lead band photo
-  catPhotos.forEach(add);      // 2) verified band/concert photos from the artist's Commons category
+  add(leadPhoto);              // 1) verified lead band photo (article infobox)
+  artPhotos.forEach(add);      // 2) curated OFFICIAL photos from the artist's Wikipedia article
+  catPhotos.forEach(add);      // 3) context-filtered photos from the artist's Commons category
   add(cover);                  // 3) the now-playing album cover
   const coverKey = cover ? baseAlbumKey(cover.title) : "";
   for (const a of albs) {      // 4) other album covers (artist-matched, edition-deduped)
