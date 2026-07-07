@@ -21,7 +21,7 @@ const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "1.2"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "1.3"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -216,7 +216,7 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     "- Do NOT reproduce or paraphrase song lyrics.\n\n" +
     "COMPLEMENTARITY (critical): The reader has ALREADY read the short story provided as ALREADY-TOLD. Your job is to ADD NEW knowledge and angles they have NOT read yet. Do NOT restate the facts, phrasing, or anecdotes in ALREADY-TOLD. You may briefly reference something from it ONLY if strictly necessary as a bridge. Going deeper means new information, not a re-tell.\n\n" +
     "HEADINGS: Use ONLY these section headings, verbatim: The song, The album, The era, Producer & engineer, and optionally Covers (only if real cover versions exist). Do NOT invent other headings. Never address data, sources, lookups, uncertainty or discrepancies — if unsure, silently omit.\n\n" +
-    "SIMILAR SONGS (recos): Also pick EXACTLY TWO songs to recommend for discovery. Rules: (1) by DIFFERENT artists than this song's artist and different from each other; (2) NOT from the same album; (3) gravitate to OTHER artists to help the listener discover new acts; (4) they must genuinely match this song's vibe — groove, era, tempo/beat, rhythm, energy and overall feel; (5) each needs a one-line 'why' naming the shared musical quality. If a CANDIDATES list is given (real co-listening data), prefer picks from it, but you may substitute a better-fitting cross-artist song you are confident is real. Pick real, findable songs.\n\n" +
+    "SIMILAR SONGS (recos): Also pick THREE candidate songs for discovery (the app shows the best two). Rules: (1) EVERY pick is by a DIFFERENT artist than this song's artist AND different from each other — no repeats; (2) NOT from the same album; (3) gravitate to OTHER artists to help the listener discover new acts; (4) each must genuinely match this song's vibe — groove, era, tempo/beat, rhythm, energy and overall feel; (5) each needs a short complete one-line 'why' (<= 16 words) naming the shared musical quality. If a CANDIDATES list is given (real co-listening data), prefer picks from it, but you may substitute a better-fitting cross-artist song you are confident is real. Pick real, findable songs.\n\n" +
     "Output STRICT JSON only — no prose, no markdown fences.";
   const user =
     `Facts:\n${factsBlock(f)}\n\n` +
@@ -236,8 +236,9 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     `{"type":"p","text":"notable cover versions — OMIT this whole section if none genuinely exist"}` +
     `],` +
     `"recos":[` +
-    `{"title":"song title","artist":"a DIFFERENT artist","why":"one short line: the shared groove/era/beat/feel"},` +
-    `{"title":"song title","artist":"another DIFFERENT artist","why":"one short line: the shared quality"}` +
+    `{"title":"song title","artist":"a DIFFERENT artist","why":"short complete line: the shared groove/era/beat/feel"},` +
+    `{"title":"song title","artist":"another DIFFERENT artist","why":"short complete line: the shared quality"},` +
+    `{"title":"song title","artist":"a third DIFFERENT artist","why":"short complete line: the shared quality"}` +
     `]}}`;
   const body = { model: ANTHROPIC_MODEL, max_tokens: 2000, system, messages: [{ role: "user", content: user }] };
   const ctrl = new AbortController();
@@ -300,6 +301,13 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
   } catch (e) { context.log("anthropic error", e.message); return null; } finally { clearTimeout(timer); }
 }
 
+// Trim a reco's "why" to a whole word (never mid-word).
+function clipWhy(w) {
+  var s = (w ? String(w) : "").replace(/\s+/g, " ").trim();
+  if (s.length <= 140) return s;
+  var cut = s.slice(0, 140), sp = cut.lastIndexOf(" ");
+  return (sp > 60 ? cut.slice(0, sp) : cut).replace(/[,;:.\-\s]+$/, "") + "…";
+}
 // Validate recommendations: 2 max, different artists, not the song's artist, not the same title.
 function cleanRecos(arr, songArtist) {
   const pa = norm(primaryArtist(songArtist));
@@ -312,7 +320,7 @@ function cleanRecos(arr, songArtist) {
     const k = na + "|" + nt;
     if (seen[k] || seen["artist:" + na]) return;       // dedupe + one per artist
     seen[k] = 1; seen["artist:" + na] = 1;
-    out.push({ title: String(r.title).trim(), artist: String(r.artist).trim(), why: (r.why ? String(r.why).trim() : "").slice(0, 120) });
+    out.push({ title: String(r.title).trim(), artist: String(r.artist).trim(), why: clipWhy(r.why) });
   });
   return out.slice(0, 2);
 }
