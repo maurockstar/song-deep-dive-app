@@ -20,6 +20,7 @@ window.SDD_CONFIG = {
 
   // App version — single source of truth (bumping it also invalidates the local card cache).
   // 2.1: clears divergent per-device story caches so every device re-pulls the single canonical story.
-  // 2.2: removed the artist·album·year credit line under the story dek.
-  VERSION: "2.2"
+  // 2.2: removed the artist/album/year credit line under the story dek.
+  // 2.3: fixed broken lead photo (Wikipedia /thumb/ filename) + hide media tiles whose image 404s.
+  VERSION: "2.3"
 };

@@ -186,7 +186,7 @@
     var key = trackKey(t);
     curStoryKey = key;
     try {
-      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", v: "8" }).toString())
+      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", v: "9" }).toString())
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
           if (key !== curStoryKey || curTab !== "cards") return;
@@ -298,7 +298,7 @@
     if (!track) { notePanel("Play or search a song first to see the artist’s media."); return; }
     panel.innerHTML = '<div class="soon"><p>Gathering photos and album art…</p></div>';
     try {
-      var res = await fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: track.artist || "", title: track.title || "", v: "8" }).toString());
+      var res = await fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: track.artist || "", title: track.title || "", v: "9" }).toString());
       if (!res.ok) throw 0;
       var d = await res.json();
       var items = (d && d.items) || [];
@@ -316,8 +316,22 @@
           + (isVideo ? playBadge : "")
           + '<div class="mcap">' + esc(it.title || "") + '</div></div>';
       });
-      grid += '</div><div class="media-foot">' + items.length + ' ITEMS · HI-RES</div>';
+      grid += '</div><div class="media-foot" id="media-foot">' + items.length + ' ITEMS · HI-RES</div>';
       panel.innerHTML = grid;
+      // Belt-and-suspenders: a tile is a CSS background image, which can't report a 404, so a broken
+      // URL would show as an empty box. Probe each tile's image and drop any that fail to load.
+      Array.prototype.forEach.call(panel.querySelectorAll(".mtile"), function (tile) {
+        var m = (tile.getAttribute("style") || "").match(/url\(['"]?([^'")]+)['"]?\)/);
+        var src = (m && m[1]) || tile.getAttribute("data-full");
+        if (!src) return;
+        var probe = new Image();
+        probe.onerror = function () {
+          if (tile.parentNode) tile.parentNode.removeChild(tile);
+          var foot = panel.querySelector("#media-foot"), left = panel.querySelectorAll(".mtile").length;
+          if (foot) foot.textContent = left + " ITEMS · HI-RES";
+        };
+        probe.src = src;
+      });
     } catch (e) { notePanel("Couldn’t load media right now."); }
   }
 
@@ -819,4 +833,3 @@
 
   document.addEventListener("DOMContentLoaded", init);
 })();
-

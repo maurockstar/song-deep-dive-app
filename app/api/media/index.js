@@ -58,8 +58,16 @@ function wikiImg(origUrl, width) {
     const mWiki = origUrl.match(/\/wikipedia\/([a-z]+)\//);
     const wiki = (mWiki && mWiki[1]) || "commons";
     const host = wiki === "commons" ? "commons.wikimedia.org" : (wiki + ".wikipedia.org");
-    const file = origUrl.split("/").pop().split("?")[0];
-    return "https://" + host + "/wiki/Special:FilePath/" + file + "?width=" + width;
+    const parts = origUrl.split("?")[0].split("/");
+    // Wikimedia serves scaled images as .../thumb/a/ab/RealName.jpg/1234px-RealName.jpg —
+    // so for a /thumb/ URL the real file is the SECOND-to-last segment, NOT the last one
+    // (the last one is "1234px-RealName.jpg", which does NOT exist as a Commons file → 404 → blank tile).
+    let file = (origUrl.indexOf("/thumb/") > -1 && parts.length >= 2)
+      ? parts[parts.length - 2]
+      : parts[parts.length - 1];
+    // Defensive: strip any leftover thumbnail-size prefix (e.g. "800px-", "lossy-page1-800px-").
+    file = file.replace(/^(?:lossy-page\d+-)?\d+px-/, "");
+    return "https://" + host + "/wiki/Special:FilePath/" + encodeURIComponent(file) + "?width=" + width;
   } catch (e) { return origUrl; }
 }
 
