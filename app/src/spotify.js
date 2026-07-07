@@ -365,25 +365,26 @@
       return Array.isArray(d) ? !!d[0] : null;
     } catch (e) { return null; }
   }
-  // Add to Liked Songs. Returns true on success.
+  // Add to Liked Songs. Uses Spotify's canonical JSON-body form. Returns the HTTP status
+  // (0 = network error, 401 = no token) so the UI can explain a failure precisely.
   async function saveTrack(id) {
-    if (!id) return false;
+    if (!id) return 0;
     var token = await getAccessToken();
-    if (!token) return false;
+    if (!token) return 401;
     try {
-      var res = await fetch(API + "/me/tracks?ids=" + encodeURIComponent(id), { method: "PUT", headers: { Authorization: "Bearer " + token } });
-      return res.ok || res.status === 200;
-    } catch (e) { return false; }
+      var res = await fetch(API + "/me/tracks", { method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ ids: [id] }) });
+      return res.status;
+    } catch (e) { return 0; }
   }
-  // Remove from Liked Songs. Returns true on success.
+  // Remove from Liked Songs. Returns the HTTP status (see saveTrack).
   async function removeTrack(id) {
-    if (!id) return false;
+    if (!id) return 0;
     var token = await getAccessToken();
-    if (!token) return false;
+    if (!token) return 401;
     try {
-      var res = await fetch(API + "/me/tracks?ids=" + encodeURIComponent(id), { method: "DELETE", headers: { Authorization: "Bearer " + token } });
-      return res.ok || res.status === 200;
-    } catch (e) { return false; }
+      var res = await fetch(API + "/me/tracks", { method: "DELETE", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ ids: [id] }) });
+      return res.status;
+    } catch (e) { return 0; }
   }
 
   window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl, queueTrack: queueTrack, resolveTrack: resolveTrack, queueUri: queueUri, sdkAvailable: sdkAvailable, playHere: playHere, sdkNeedsReconnect: sdkNeedsReconnect, initSdkPlayer: initSdkPlayer, isSaved: isSaved, saveTrack: saveTrack, removeTrack: removeTrack };

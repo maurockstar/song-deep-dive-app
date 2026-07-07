@@ -108,9 +108,11 @@
     var want = !likeState.saved;
     paintLike(want);
     if (want) likeEls().forEach(function (el) { el.classList.add("pop"); setTimeout(function () { el.classList.remove("pop"); }, 360); });
-    var ok = want ? await S.saveTrack(id) : await S.removeTrack(id);
+    var st = want ? await S.saveTrack(id) : await S.removeTrack(id);
+    var ok = st >= 200 && st < 300;
     if (ok) { likeState.saved = want; flashPmsg(want ? "Added to your Spotify Liked Songs" : "Removed from Liked Songs"); }
-    else { paintLike(likeState.saved); flashPmsg("Couldn't update Liked Songs \u2014 reconnect Spotify and try again."); }
+    else if (st === 401 || st === 403) { paintLike(likeState.saved); flashPmsg("Spotify hasn't granted the Liked Songs permission (" + st + "). Disconnect + reconnect Spotify from the sliders menu, top-right."); }
+    else { paintLike(likeState.saved); flashPmsg("Couldn't update Liked Songs (Spotify " + st + "). Please try again."); }
     likeState.busy = false;
   }
 
