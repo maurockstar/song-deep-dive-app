@@ -34,6 +34,7 @@ function capped(map) { if (map.size > CACHE_MAX) map.clear(); }
 function norm(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
 function primaryArtist(a) { return String(a || "").split(/,|&|;|\/|\bfeat\.?\b|\bfeaturing\b|\bwith\b|\bx\b|\bvs\.?\b/i)[0].trim(); }
 function songTitleBase(t) { return String(t || "").replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ").replace(/\s[-–—]\s.*$/, " "); }
+function cleanAlbumName(a) { return String(a || "").replace(/\s*[\(\[][^\)\]]*\b(?:remaster(?:ed)?|deluxe|expanded|edition|version|mono|stereo|anniversary|bonus|re-?issue|special|collector'?s)\b[^\)\]]*[\)\]]/gi, "").replace(/\s{2,}/g, " ").trim(); }
 function cacheKey(q) { return ("song:" + norm(songTitleBase(q.title)) + "|" + norm(primaryArtist(q.artist))).replace(/\s+/g, "_"); }
 
 async function jget(url, headers, ms) {
@@ -195,6 +196,8 @@ async function lastfmSimilar(title, artist) {
 }
 
 async function gatherDeepFacts(title, artist, context, knownAlbum) {
+  title = (songTitleBase(title).trim() || title); // drop "- Remastered 2015" / "(...)" so MusicBrainz + Wikipedia resolve
+  knownAlbum = cleanAlbumName(knownAlbum);         // drop "(Remastered)" / "(Deluxe Edition)" etc
   const f = { title, artist, year: "", mbArtist: "", album: "", albumAuthoritative: false, producer: "", engineer: "", writers: "", tags: "", wikiSong: "", wikiArtist: "", wikiAlbum: "" };
   const creditMap = new Map();
 
@@ -213,7 +216,7 @@ async function gatherDeepFacts(title, artist, context, knownAlbum) {
     }
     if (det && Array.isArray(det.releases) && det.releases.length) {
       const rels = det.releases.slice().sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")));
-      f.album = (rels[0] && rels[0].title) || "";
+      f.album = cleanAlbumName((rels[0] && rels[0].title) || "");
     }
     if (workId) {
       const work = await jget(`${MB_BASE}/work/${workId}?inc=artist-rels&fmt=json`, { "User-Agent": MB_UA });
@@ -473,7 +476,10 @@ module.exports = async function (context, req) {
   ]);
 
   let ai = null;
-  if (apiKey) ai = await writeDeeperWithClaude(apiKey, facts, seed, similarPool, context);
+  if (apiKey) {
+    ai = await writeDeeperWithClaude(apiKey, facts, seed, similarPool, context);
+    if (!(ai && ai.body && ai.body.length)) { await new Promise(function (r) { setTimeout(r, 800); }); ai = await writeDeeperWithClaude(apiKey, facts, seed, similarPool, context); } // one retry so a transient AI overload does not dump the reader into the bare template
+  }
   const aiUsed = !!(ai && ai.body && ai.body.length);
   const deeper = aiUsed ? ai : templateDeeper(facts, similarPool);
   deeper.video = video || null; // official YouTube/Vimeo video for the song (or null)
