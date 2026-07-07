@@ -49,7 +49,8 @@
       redirect_uri: CFG.REDIRECT_URI,
       code_challenge_method: "S256",
       code_challenge: await challenge(verifier),
-      scope: CFG.SCOPES.join(" ")
+      scope: CFG.SCOPES.join(" "),
+      show_dialog: "true"
     });
     window.location = AUTH + "?" + params.toString();
   }
