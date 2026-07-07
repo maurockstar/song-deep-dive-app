@@ -176,8 +176,19 @@
   // Pick the best controllable device (prefer the active one, else the first non-restricted) and remember it.
   async function ensureDeviceId() {
     var devs = await listDevices();
-    var pick = devs.filter(function (d) { return d.id && !d.is_restricted; })
-                   .sort(function (a, b) { return (b.is_active ? 1 : 0) - (a.is_active ? 1 : 0); })[0];
+    var avail = devs.filter(function (d) { return d.id && !d.is_restricted; });
+    if (!avail.length) return null;
+    var onPhone = /iPhone|iPad|iPod|Android|Mobile/i.test((typeof navigator !== "undefined" && navigator.userAgent) || "");
+    var byId = function (id) { return avail.filter(function (d) { return d.id === id; })[0]; };
+    var pick =
+      // 1) resume on the device we last saw actively PLAYING (where the user paused) — most seamless.
+      (activeDeviceId ? byId(activeDeviceId) : null)
+      // 2) if geeek is running on a phone/tablet, prefer that same kind of device so playback comes to the
+      //    device in the user's hand (fixes "controlled from iPhone but resumed on the computer").
+      || (onPhone ? avail.filter(function (d) { return /smartphone|tablet/i.test(d.type || ""); })[0] : null)
+      // 3) any device Spotify still marks active; 4) otherwise the first available device.
+      || avail.filter(function (d) { return d.is_active; })[0]
+      || avail[0];
     if (pick) activeDeviceId = pick.id;
     return pick ? pick.id : null;
   }

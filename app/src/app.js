@@ -936,12 +936,13 @@
     var ok = false;
     try {
       if (action === "toggle") {
-        // Read the REAL state first (local `playing` can be up to POLL_MS stale, e.g. right after the user
-        // paused on Spotify), so a single tap always does the right thing (resume vs pause).
+        // Read the REAL state first (local `playing` can be POLL_MS stale after an external pause), then flip
+        // the icon optimistically so the tap feels instant, and reconcile if the command actually fails.
         var _t = await P.getActivePlayer().getCurrentTrack();
         var _isP = _t ? !!_t.isPlaying : playing;
+        playing = !_isP; setPlayIcon(playing); pstate.playing = playing; pstate.at = Date.now();
         ok = await (_isP ? CTRL.pause() : CTRL.play());
-        if (ok) { playing = !_isP; setPlayIcon(playing); pstate.playing = playing; pstate.at = Date.now(); }
+        if (!ok) { playing = _isP; setPlayIcon(playing); pstate.playing = playing; }
       }
       else if (action === "next") { ok = await CTRL.next(); }
       else if (action === "prev") { ok = await CTRL.prev(); }
