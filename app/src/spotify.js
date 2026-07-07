@@ -331,7 +331,7 @@
     } catch (e) { sdkPlayer = null; }
   }
   window.onSpotifyWebPlaybackSDKReady = function () { sdkLoaded = true; initSdkPlayer(); };
-  function sdkAvailable() { return !!(sdkReady && sdkDeviceId); }
+  function sdkAvailable() { return !!(sdkReady && sdkDeviceId && !sdkAuthFail && !sdkNoPremium); }
   function sdkNeedsReconnect() { return sdkAuthFail && !sdkNoPremium; }
   // Resume the user's CURRENT playback (queue + position) inside geeek's in-browser player. activateElement()
   // must fire from the user's tap (mobile autoplay policy), so call this synchronously from the click handler.
