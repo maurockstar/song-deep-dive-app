@@ -423,7 +423,7 @@
           if (it.type === "photo" && it.w && it.w < 600) return;
           if (shownStoryPhotos[url]) return;                 // not already shown up top
           var base = artBaseUrl(url); if (seen[base]) return; seen[base] = 1;
-          imgs.push({ url: url, cap: it.title || t.artist || "" });
+          imgs.push({ url: url, cap: it.title || t.artist || "", credit: it.credit || "" });
         }
         items.forEach(function (it) { if (it && it.type === "photo") add(it); }); // ONLY real band/era photos (no album-cover filler)
         imgs = imgs.slice(0, 4);
