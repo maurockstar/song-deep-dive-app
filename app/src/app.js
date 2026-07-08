@@ -904,12 +904,9 @@
   function advanceLyric() { KAR.i = (KAR.i + 1) % KAR_LINES.length; highlightLyric(); }
 
   function renderTab(name) {
-    if (name === "cards") { cur ? loadDeepDive(cur) : welcome(); }
-    else if (name === "songs") { renderSongs(); }
-    else if (name === "artists") { renderArtists(); }
+    if (name === "songs") { renderSongs(); }
     else if (name === "trivia") { resetTrivia(); renderTrivia("mode"); }
-    else if (name === "media") { cur ? loadMedia(cur) : notePanel("Play or search a song first to see the artist’s media."); }
-    else if (name === "shazam") { renderShazam(); }
+    else { cur ? loadDeepDive(cur) : welcome(); } // cards (and any removed/stale tab) -> the deep-dive story
   }
 
   // ---------- polling ----------
@@ -931,7 +928,6 @@
         playing = !!track.isPlaying; setPlayIcon(playing); tickProgress();
         setHero(track); updateShareLink(track); updateLightboxLive(track);
         if (curTab === "cards") loadDeepDive(track);
-        else if (curTab === "media") loadMedia(track);
       } else if (!manualMode) {
         if (track) {
           pstate = { progressMs: track.progressMs || 0, durationMs: track.durationMs || 0, playing: !!track.isPlaying, at: Date.now() };
@@ -1176,7 +1172,7 @@
     // shared ui hooks for Apple Music provider
     window.SDD.ui = {
       renderNowPlaying: function (t) { if (!t) return; setHero(t); pstate = { progressMs: 0, durationMs: 0, playing: !!t.isPlaying, at: Date.now() }; playing = !!t.isPlaying; setPlayIcon(playing); },
-      loadDeepDive: function (t) { manualMode = false; cur = t; updateShareLink(t); if (curTab === "cards") loadDeepDive(t); else if (curTab === "media") loadMedia(t); },
+      loadDeepDive: function (t) { manualMode = false; cur = t; updateShareLink(t); if (curTab === "cards") loadDeepDive(t); },
       setStatus: function () {}
     };
 
