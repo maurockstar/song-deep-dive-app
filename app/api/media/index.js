@@ -343,8 +343,8 @@ async function curatePhotos(apiKey, ctx, photos, meta) {
   const system = "You curate photographs for a music app's now-playing screen. You are shown a song and several numbered candidate photos, and you reply with JSON only.";
   const intro = "Song: \"" + (ctx.title || "") + "\" by " + (ctx.artist || "") +
     (ctx.album ? " (album \"" + ctx.album + "\"" + (ctx.year ? ", " + ctx.year : "") + ")" : "") + ".\n\n" +
-    "Below are " + valid.length + " candidate photos. Choose the ones worth showing a music fan, ORDERED best first — the FIRST picks are shown most prominently in the story, so they must be the most LEGENDARY, iconic, era-defining images: the shots fans love most about this act (signature live moments, famous venues/festivals, the classic line-up, the definitive portrait of this era).\n" +
-    "Every kept photo MUST clearly depict THIS artist/band and fit the song's era and cultural context. Blend iconic band/performance shots with any striking, era-appropriate imagery; make the first three genuinely memorable.\n" +
+    "Below are " + valid.length + " candidate photos. Choose the ones worth showing a music fan, ORDERED best first. ERA COMES FIRST: the first picks are shown most prominently, and they MUST show this act during the ERA of THIS song/album" + (ctx.year ? " (around " + ctx.year + ")" : "") + " \u2014 ideally the exact line-up that made this record. Do NOT lead with photos from a DIFFERENT era, however famous: no later reunions or one-off later events (e.g. a 2000s reunion show), and no earlier photos from before this record's era or line-up (e.g. a founding member who had already left the band). Among the era-correct photos, THEN prefer the most legendary and iconic \u2014 signature live moments, famous venues/festivals, the classic line-up, the definitive portrait of THIS era. Fame is only a tie-breaker AFTER era-match.\n" +
+    "Every kept photo MUST clearly depict THIS artist/band AND belong to the song's era. If you are not confident a photo is from the right era, do NOT place it among the first three.\n" +
     "REJECT: anything that does not actually show this artist (objects, logos, places, the wrong subject such as a chemical element), the plain album FRONT cover, and low-value shots — posed grip-and-grins or handshakes with fans/officials, backstage meet-and-greets, blurry/tiny/watermarked, fan-made or memes, generic filler.\n" +
     "Reply with JSON only, best first, up to 6: {\"keep\":[photo numbers]}. Return the best available even if fewer than 3 are truly iconic. If none qualify: {\"keep\":[]}.";
   const content = [{ type: "text", text: intro }];
@@ -453,7 +453,7 @@ module.exports = async function (context, req) {
       } while (cursor && cursor !== "0" && ++guard < 200);
       return total;
     };
-    const vis = await scanDel("sdd:vis:3:" + a + "|*");
+    const vis = (await scanDel("sdd:vis:4:" + a + "|*")) + (await scanDel("sdd:vis:3:" + a + "|*"));
     const cap = await scanDel("sdd:cap:5:" + a + "|*");
     let mem = 0; for (const k of Array.from(cache.keys())) { if (k.indexOf(a + "|") === 0) { cache.delete(k); mem++; } }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { ok: true, artist: who, purged: { vis: vis, cap: cap, mem: mem } } };
@@ -524,21 +524,23 @@ module.exports = async function (context, req) {
   // (tier 0) photos, iconic venue/festival shots (Woodstock, Fillmore, Budokan…) lead, then LIVE/organic
   // music-making shots (stage, studio, rehearsal), then era distance (the first photo should be closest
   // to the album's era; undated sinks below dated when we know the era), then resolution.
+  var ERA_WINDOW = 15; // years: lead story photos must sit within this of the song's era
   pool.forEach(function (p) {
     var s = (p.title || "") + " " + (p.src || "");
     p._magic = MAGIC_RE.test(s) ? 0 : 1;
     p._live = (p._magic === 0 || LIVE_RE.test(s)) ? 0 : 1; // a magic venue counts as live/organic
     p._dist = eraYear ? (p.yr ? Math.abs(p.yr - eraYear) : 9999) : 0;
+    // ERA-FIRST bucket: 0 = in the song's era (dated & close, or era-correct album-article photo);
+    // 1 = undated / unknown year; 2 = dated but FAR off era. Off-era shots must never lead, however iconic.
+    p._era = !eraYear ? 1 : (p._dist <= ERA_WINDOW ? 0 : (p._dist === 9999 ? 1 : 2));
   });
-  // Drop catch-all Commons-category photos that are FAR off the album era and NOT a live/performance shot —
-  // later exhibitions, memorials, murals or venues ABOUT the artist that merely name-match but don't depict the
-  // band on/near the album era (e.g. a 2023 "Pink Floyd Pompeji" exhibition hall shown for a 1975 record).
-  const ranked = pool.filter(function (p) {
-    if (p.src === "commons-cat" && eraYear && p.yr && p._live === 1 && Math.abs(p.yr - eraYear) > 15) return false;
-    return true;
-  });
+  // Era-first: drop DATED far-off-era photos from ANY source (a later reunion/exhibition must not lead an
+  // older song, e.g. a 2005 Live 8 or a 2023 exhibition hall for a 1973 record) — but only while enough
+  // in/near-era photos remain; otherwise keep them as a last resort so the story is never empty.
+  var _inEra = pool.filter(function (p) { return p._era <= 1; });
+  const ranked = (_inEra.length >= 3 ? _inEra : pool.slice());
   ranked.sort(function (a, b) {
-    return (a._tier - b._tier) || (a._magic - b._magic) || (a._live - b._live) || (a._dist - b._dist) || ((b.w * b.h) - (a.w * a.h));
+    return (a._tier - b._tier) || (a._era - b._era) || (a._magic - b._magic) || (a._live - b._live) || (a._dist - b._dist) || ((b.w * b.h) - (a.w * a.h));
   });
 
   // ---- AI vision curation: keep only the interesting, on-topic photos (cached per song so it runs once) ----
@@ -546,7 +548,7 @@ module.exports = async function (context, req) {
   let curated = ranked;
   const visMeta = {};
   if (apiKey && ranked.length >= 2) {
-    const visKey = "sdd:vis:3:" + key; // bump the digit if the curation prompt changes
+    const visKey = "sdd:vis:4:" + key; // v4 2026-07-08: era-FIRST lead-photo curation (bump if the prompt changes)
     let order = await capGet(visKey);
     if (order) { visMeta.visStatus = "cache"; }
     if (!order) {
