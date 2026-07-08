@@ -372,16 +372,15 @@
     deeperState = { loaded: false, key: curStoryKey };
     curStoryText = [story.headline, dek].concat((story.body || []).map(function (b) { return b && b.text; })).filter(Boolean).join("\n"); // seed for complementary deeper
     panel.innerHTML = '<article class="st-read">'
+      + '<div class="st-langbar" role="group" aria-label="Story language"><button type="button" class="st-lang' + (STORY_LANG === "en" ? " on" : "") + '" data-lang="en">EN</button><span class="st-lang-sep" aria-hidden="true">·</span><button type="button" class="st-lang' + (STORY_LANG === "es" ? " on" : "") + '" data-lang="es">ES</button></div>'
       + '<div class="st-lead" id="st-lead"></div>'
-      + '<div class="st-kicker">The story</div>'
+      + '<div class="st-kicker">' + esc(L("story")) + '</div>'
       + '<h2 class="st-headline">' + esc(story.headline || "") + '</h2>'
       + (dek ? '<p class="st-dek">' + esc(dek) + '</p>' : '')
       + '<div class="st-body">' + storyBlocksHtml(story.body, [story.headline, dek]) + '</div>'
       + '<div class="st-deeper-wrap"><button class="st-deeper-btn" id="st-deeper-btn" type="button"><span class="lbl">' + esc(L("deeper")) + '</span><span class="chev" aria-hidden="true">▾</span></button></div>'
       + '<div class="st-deeper hidden" id="st-deeper"></div>'
       + '</article>';
-    var _lb = panel.querySelector(".st-langbar");
-    if (_lb) _lb.addEventListener("click", function (ev) { var b = ev.target && ev.target.closest && ev.target.closest(".st-lang"); if (b) setStoryLang(b.getAttribute("data-lang")); });
     enrichStoryRetry(payload, 5);
   }
   function renderCards(payload) { renderStory(payload); }
@@ -1144,6 +1143,7 @@
 
     // panel delegation (trivia + media tiles)
     panel.addEventListener("click", function (e) {
+      var lng = e.target.closest(".st-lang"); if (lng) { setStoryLang(lng.getAttribute("data-lang")); return; }
       var bk = e.target.closest(".tv-back"); if (bk) { renderTrivia(bk.getAttribute("data-to")); return; }
       var md = e.target.closest(".tv-mode"); if (md) { trivia.mode = md.getAttribute("data-mode"); if (trivia.mode === "solo") renderTrivia("subject"); else if (trivia.mode === "contest") renderContestPick(); else renderFriends(); return; }
       var cr = e.target.closest(".tv-contest"); if (cr) { renderLeaderboard(cr.getAttribute("data-artist") || "The Beatles"); return; }
