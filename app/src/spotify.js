@@ -278,25 +278,30 @@
   async function resolveTrack(title, artist) {
     var token = await getAccessToken();
     if (!token) return null;
-    var q = 'track:"' + (title || "") + '"' + (artist ? ' artist:"' + artist + '"' : "");
-    try {
-      var res = await fetch(API + "/search?type=track&limit=5&q=" + encodeURIComponent(q), { headers: { Authorization: "Bearer " + token } });
-      if (!res.ok) return null;
-      var d = await res.json();
-      var items = (d.tracks && d.tracks.items) || [];
-      var wantT = normName(title), wantA = normName(artist);
-      for (var i = 0; i < items.length; i++) {
-        var t = items[i];
-        var gotT = normName(t.name);
-        var arts = (t.artists || []).map(function (a) { return normName(a.name); });
-        var titleOk = !!wantT && (gotT === wantT || (gotT && (gotT.indexOf(wantT) === 0 || wantT.indexOf(gotT) === 0)));
-        var artistOk = !wantA || arts.some(function (a) { return a && (a === wantA || a.indexOf(wantA) > -1 || wantA.indexOf(a) > -1); });
-        if (titleOk && artistOk) {
-          return { uri: t.uri, url: (t.external_urls && t.external_urls.spotify) || null, name: t.name, artist: (t.artists || []).map(function (a) { return a.name; }).join(", ") };
+    var wantT = normName(title), wantA = normName(artist);
+    if (!wantT) return null;
+    async function trySearch(q, limit) {
+      try {
+        var res = await fetch(API + "/search?type=track&limit=" + (limit || 8) + "&q=" + encodeURIComponent(q), { headers: { Authorization: "Bearer " + token } });
+        if (!res.ok) return null;
+        var d = await res.json();
+        var items = (d.tracks && d.tracks.items) || [];
+        for (var i = 0; i < items.length; i++) {
+          var t = items[i];
+          var gotT = normName(t.name);
+          var arts = (t.artists || []).map(function (a) { return normName(a.name); });
+          var titleOk = gotT === wantT || (gotT && (gotT.indexOf(wantT) === 0 || wantT.indexOf(gotT) === 0));
+          var artistOk = !wantA || arts.some(function (a) { return a && (a === wantA || a.indexOf(wantA) > -1 || wantA.indexOf(a) > -1); });
+          if (titleOk && artistOk) {
+            return { uri: t.uri, url: (t.external_urls && t.external_urls.spotify) || null, name: t.name, artist: (t.artists || []).map(function (a) { return a.name; }).join(", ") };
+          }
         }
-      }
+      } catch (e) {}
       return null;
-    } catch (e) { return null; }
+    }
+    // 1) strict field query; 2) looser plain-words query (catches tracks the strict operators miss).
+    return (await trySearch('track:"' + (title || "") + '"' + (artist ? ' artist:"' + artist + '"' : ""), 5))
+        || (await trySearch(((title || "") + " " + (artist || "")).trim(), 8));
   }
   // Queue an EXACT, already-resolved track URI (plays next, never resets the queue).
   async function queueUri(uri) {

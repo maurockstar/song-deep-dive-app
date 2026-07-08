@@ -22,7 +22,7 @@ const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "2.3"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "2.4"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -46,6 +46,25 @@ async function jget(url, headers, ms) {
     if (!r.ok) return null;
     return await r.json();
   } catch (e) { return null; } finally { clearTimeout(timer); }
+}
+// Raw-text GET (for scraping YouTube search results HTML, which isn't JSON).
+async function jgetText(url, headers, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms || 8000);
+  try {
+    const h = Object.assign({ "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept-Language": "en-US,en;q=0.9" }, headers || {});
+    const r = await fetch(url, { headers: h, signal: ctrl.signal });
+    if (!r.ok) return null;
+    return await r.text();
+  } catch (e) { return null; } finally { clearTimeout(timer); }
+}
+// Keyless YouTube search: read the results page and pull the ranked videoIds from ytInitialData.
+async function youtubeSearchIds(query) {
+  const html = await jgetText("https://www.youtube.com/results?search_query=" + encodeURIComponent(query) + "&hl=en", {}, 7000);
+  if (!html) return [];
+  const ids = []; const re = /"videoId":"([A-Za-z0-9_-]{11})"/g; let m;
+  while ((m = re.exec(html)) && ids.length < 12) { if (ids.indexOf(m[1]) === -1) ids.push(m[1]); }
+  return ids;
 }
 
 // ---- shared cache (Upstash Redis REST). No-op when env vars aren't set. ----
@@ -134,17 +153,18 @@ async function officialVideo(title, artist) {
     const s = await jget(WIKI + encodeURIComponent(c) + "?redirect=true", {});
     if (s && s.title && s.type !== "disambiguation") { articleTitle = s.title; break; }
   }
-  if (!articleTitle) return null;
-  const j = await jget(WIKI_API + "?action=query&prop=extlinks&ellimit=500&titles=" + encodeURIComponent(articleTitle) + "&format=json&origin=*", {});
-  const pages = (j && j.query && j.query.pages) ? Object.values(j.query.pages) : [];
-  const links = ((pages[0] && pages[0].extlinks) || []).map(function (x) { return x["*"] || x; }).filter(Boolean);
   const ytIds = [], vimIds = [];
-  for (const l of links) {
-    if (/web\.archive\.org/i.test(l)) continue;
-    const m = l.match(/[?&]v=([A-Za-z0-9_-]{11})/) || l.match(/youtu\.be\/([A-Za-z0-9_-]{11})/);
-    if (m) { if (ytIds.indexOf(m[1]) === -1) ytIds.push(m[1]); continue; }
-    const vm = l.match(/vimeo\.com\/(\d{6,})/);
-    if (vm) { if (vimIds.indexOf(vm[1]) === -1) vimIds.push(vm[1]); }
+  if (articleTitle) {
+    const j = await jget(WIKI_API + "?action=query&prop=extlinks&ellimit=500&titles=" + encodeURIComponent(articleTitle) + "&format=json&origin=*", {});
+    const pages = (j && j.query && j.query.pages) ? Object.values(j.query.pages) : [];
+    const links = ((pages[0] && pages[0].extlinks) || []).map(function (x) { return x["*"] || x; }).filter(Boolean);
+    for (const l of links) {
+      if (/web\.archive\.org/i.test(l)) continue;
+      const m = l.match(/[?&]v=([A-Za-z0-9_-]{11})/) || l.match(/youtu\.be\/([A-Za-z0-9_-]{11})/);
+      if (m) { if (ytIds.indexOf(m[1]) === -1) ytIds.push(m[1]); continue; }
+      const vm = l.match(/vimeo\.com\/(\d{6,})/);
+      if (vm) { if (vimIds.indexOf(vm[1]) === -1) vimIds.push(vm[1]); }
+    }
   }
   const paN = norm(pa).replace(/ /g, "");
   function official(vt, ch) {
@@ -168,7 +188,18 @@ async function officialVideo(title, artist) {
       return { platform: "vimeo", id: id, url: "https://vimeo.com/" + id, thumb: oe.thumbnail_url || "", videoTitle: oe.title, channel: oe.author_name || "" };
     }
   }
-  return null;
+  // Tier 2: search YouTube directly (the top hit for "artist title official video" is the official upload).
+  const searchIds = await youtubeSearchIds((pa ? pa + " " : "") + title + " official video");
+  for (const id of searchIds.slice(0, 8)) {
+    if (ytIds.indexOf(id) > -1) continue;
+    const oe = await jget("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id), {});
+    if (!oe || !oe.title) continue;
+    if (official(oe.title, oe.author_name)) {
+      return { platform: "youtube", id: id, url: "https://www.youtube.com/watch?v=" + id, thumb: oe.thumbnail_url || ("https://i.ytimg.com/vi/" + id + "/hqdefault.jpg"), videoTitle: oe.title, channel: oe.author_name || "" };
+    }
+  }
+  // Tier 3: always give a "find it on YouTube" search link so the video section is never empty.
+  return { platform: "youtube", search: true, url: "https://www.youtube.com/results?search_query=" + encodeURIComponent((pa ? pa + " " : "") + title + " official video") };
 }
 
 // Real co-listening candidates (cross-artist) from Last.fm — only when LASTFM_API_KEY is set.

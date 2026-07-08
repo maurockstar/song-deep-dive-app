@@ -467,7 +467,7 @@
   function renderSimilarSongs(wrap, recos) {
     if (!wrap || !recos || !recos.length) return;
     var sec = document.createElement("div"); sec.className = "st-recos"; wrap.appendChild(sec); // append now so the story photo can anchor above it
-    resolveCandidates(recos, 2).then(function (matched) {
+    resolveCandidates(recos, 3).then(function (matched) {
       if (!matched.length) { if (sec.parentNode) sec.parentNode.removeChild(sec); return; }
       var h = document.createElement("h3"); h.className = "st-dh st-recos-h"; h.textContent = "Similar songs"; sec.appendChild(h);
       var note = document.createElement("p"); note.className = "st-recos-note"; note.textContent = "Tap to add to your Spotify queue — plays next."; sec.appendChild(note);
@@ -519,7 +519,7 @@
     var ytLogo = '<svg width="64" height="45" viewBox="0 0 68 48" aria-hidden="true"><path fill="#ff0000" d="M66.5 7.7c-.8-2.9-3-5.1-5.9-5.9C55.3.5 34 .5 34 .5S12.7.5 7.4 1.8C4.5 2.6 2.3 4.8 1.5 7.7.2 13 .2 24 .2 24s0 11 1.3 16.3c.8 2.9 3 5.1 5.9 5.9C12.7 47.5 34 47.5 34 47.5s21.3 0 26.6-1.3c2.9-.8 5.1-3 5.9-5.9C67.8 35 67.8 24 67.8 24s0-11-1.3-16.3z"/><path fill="#fff" d="M27 34l18-10-18-10z"/></svg>';
     var vimLogo = '<svg width="54" height="54" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1ab7ea"/><path fill="#fff" d="M18.5 8.6c-.06 1.3-.97 3.06-2.73 5.3-1.82 2.33-3.36 3.5-4.62 3.5-.78 0-1.44-.72-1.98-2.16l-1.08-3.96c-.4-1.44-.83-2.16-1.29-2.16-.1 0-.45.21-1.05.63l-.63-.81c.66-.58 1.31-1.16 1.95-1.74.88-.76 1.54-1.16 1.98-1.2 1.04-.1 1.68.61 1.92 2.13.26 1.64.44 2.66.54 3.06.3 1.36.63 2.04.99 2.04.28 0 .7-.44 1.26-1.32.56-.88.86-1.55.9-2.01.08-.76-.22-1.14-.9-1.14-.32 0-.65.07-.99.22.66-2.16 1.92-3.21 3.78-3.15 1.38.04 2.03.94 1.95 2.69z"/></svg>';
     a.innerHTML = '<span class="video-badge">' + (isVimeo ? vimLogo : ytLogo) + '</span>'
-      + '<span class="video-label">Watch the official video on ' + (isVimeo ? "Vimeo" : "YouTube") + ' \u2197</span>';
+      + '<span class="video-label">' + (video.search ? "Find the official video on " : "Watch the official video on ") + (isVimeo ? "Vimeo" : "YouTube") + ' \u2197</span>';
     sec.appendChild(a);
     wrap.appendChild(sec);
   }
