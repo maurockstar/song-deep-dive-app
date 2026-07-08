@@ -260,7 +260,7 @@
     var key = trackKey(t);
     curStoryKey = key;
     try {
-      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || "", year: t.albumYear || "", v: "23" }).toString())
+      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || "", year: t.albumYear || "", v: "24" }).toString())
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
           if (key !== curStoryKey || curTab !== "cards") return;
@@ -508,7 +508,7 @@
   }
   // Deeper photos — deliberately DIFFERENT from the first section (shownStoryPhotos are excluded).
   function enrichDeeperMedia(t, wrap) {
-    fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || "", year: t.albumYear || "", v: "23" }).toString())
+    fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || "", year: t.albumYear || "", v: "24" }).toString())
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (curStoryKey !== trackKey(t)) return;
@@ -575,7 +575,7 @@
     if (!track) { notePanel("Play or search a song first to see the artist’s media."); return; }
     panel.innerHTML = '<div class="soon"><p>Gathering photos and album art…</p></div>';
     try {
-      var res = await fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: track.artist || "", title: track.title || "", album: track.album || "", year: track.albumYear || "", v: "23" }).toString());
+      var res = await fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: track.artist || "", title: track.title || "", album: track.album || "", year: track.albumYear || "", v: "24" }).toString());
       if (!res.ok) throw 0;
       var d = await res.json();
       var items = (d && d.items) || [];
