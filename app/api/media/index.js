@@ -469,7 +469,7 @@ module.exports = async function (context, req) {
 
   // Cache keyed by ALBUM so each record is its own combination (same combo only for the same album/artist).
   const key = (artist + "|" + (album || title)).toLowerCase().replace(/\s+/g, "_");
-  if (cache.has(key)) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600" }, body: cache.get(key) }; return; }
+  if (cache.has(key)) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: cache.get(key) }; return; }
 
   // Resolve the artist's music article. Prefer the FULL name so a band whose name contains "&" or ","
   // (e.g. "Iron & Wine", "Earth, Wind & Fire") is NOT reduced to a fragment like "Iron" (the element).
@@ -600,5 +600,5 @@ module.exports = async function (context, req) {
   // Cache only a COMPLETE result: >=2 photos, or nothing more to get (no music article) — so a cold
   // Wikipedia timeout that returned just the infobox is NOT cached and simply retries next time.
   if (items.length && (nPhoto >= 2 || !mw)) { if (cache.size > CACHE_MAX) cache.clear(); cache.set(key, payload); }
-  context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600" }, body: payload };
+  context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: payload };
 };
