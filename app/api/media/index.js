@@ -626,29 +626,44 @@ module.exports = async function (context, req) {
     add(a);
   }
 
-  // ---- Rewrite each photo's caption: a short who/what title that links it to the song, then the year ----
+  // ---- Captions: a short who/what title per photo. Generate the REQUESTED language AND the other
+  // language IN PARALLEL and cache BOTH payloads, so switching the story language is instant. Photos are
+  // identical across languages; only captions differ. Two concurrent AI caption calls -> no double wait.
+  const otherLang = lang === "es" ? "en" : "es";
   const photoItems = items.filter(function (x) { return x.type === "photo"; });
-  if (photoItems.length) {
-    const capKey = "sdd:cap:5:" + (lang === "es" ? "es:" : "") + key; // v3 2026-07-07: magic-moment/era-insight caption prompt (bump if the prompt changes)
-    let capMap = (await capGet(capKey)) || {};
-    const missing = photoItems.filter(function (p) { return !capMap[photoId(p.url)]; });
+  photoItems.forEach(function (p) { p._cap = p.title; }); // preserve the filename-derived source title for both languages
+  async function captionMap(lg) {
+    const ck = "sdd:cap:5:" + (lg === "es" ? "es:" : "") + key;
+    let cm = (await capGet(ck)) || {};
+    if (!photoItems.length) return cm;
+    const missing = photoItems.filter(function (p) { return !cm[photoId(p.url)]; });
     if (missing.length && apiKey) {
-      const gen = await smartCaptions(apiKey, { title: title, artist: pa, album: album }, missing.map(function (p) { return p.title; }), lang);
+      const gen = await smartCaptions(apiKey, { title: title, artist: pa, album: album }, missing.map(function (p) { return p._cap; }), lg);
       if (gen && gen.length === missing.length) {
-        missing.forEach(function (p, i) { if (gen[i]) capMap[photoId(p.url)] = gen[i].slice(0, 48); });
-        await capSet(capKey, capMap);
+        missing.forEach(function (p, i) { if (gen[i]) cm[photoId(p.url)] = gen[i].slice(0, 48); });
+        await capSet(ck, cm);
       }
     }
-    photoItems.forEach(function (p) {
-      var short = capMap[photoId(p.url)] || cleanTitle(p.title, artist);
-      p.title = short + (p.yr ? " \u00b7 " + p.yr : "");
-    });
+    return cm;
   }
+  const capResults = await Promise.all([ captionMap(lang), (apiKey ? captionMap(otherLang) : Promise.resolve({})) ]);
+  const capReq = capResults[0], capOther = capResults[1];
 
-  const payload = { artist, title, album: album || null, eraYear: eraYear || null, items, _meta: { source: "wikipedia-article+commons+itunes", artistArticle: mw && mw.title, albumEraPhotos: albumPhotos.length, vis: visMeta.visStatus || null, generatedAt: new Date().toISOString() } };
   const nPhoto = items.filter(function (x) { return x.type === "photo"; }).length;
-  // Cache only a COMPLETE result: >=2 photos, or nothing more to get (no music article) — so a cold
-  // Wikipedia timeout that returned just the infobox is NOT cached and simply retries next time.
-  if (items.length && (nPhoto >= 2 || !mw)) { if (cache.size > CACHE_MAX) cache.clear(); cache.set(memKey, payload); }
+  function buildPayload(capMap) {
+    const its = items.map(function (it) {
+      const c = Object.assign({}, it);
+      if (c.type === "photo") { var short = capMap[photoId(c.url)] || cleanTitle(c._cap || c.title, artist); c.title = short + (c.yr ? " \u00b7 " + c.yr : ""); }
+      delete c._cap;
+      return c;
+    });
+    return { artist, title, album: album || null, eraYear: eraYear || null, items: its, _meta: { source: "wikipedia-article+commons+itunes", artistArticle: mw && mw.title, albumEraPhotos: albumPhotos.length, vis: visMeta.visStatus || null, generatedAt: new Date().toISOString() } };
+  }
+  const payload = buildPayload(capReq);
+  const complete = items.length && (nPhoto >= 2 || !mw);
+  // Cache only a COMPLETE result (>=2 photos, or nothing more to get) so a cold Wikipedia timeout retries.
+  if (complete) { if (cache.size > CACHE_MAX) cache.clear(); cache.set(memKey, payload); }
+  // Pre-cache the OTHER language's captions so a language switch is instant (best-effort).
+  if (apiKey && complete) { const oMem = otherLang === "es" ? key + "|es" : key; cache.set(oMem, buildPayload(capOther)); }
   context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: payload };
 };

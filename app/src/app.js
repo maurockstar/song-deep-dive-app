@@ -166,6 +166,7 @@
     try { if (window.localStorage) localStorage.setItem("gk_story_lang", lang); } catch (e) {}
     if (curTab === "cards") { if (cur && (cur.title || cur.id)) loadDeepDive(cur); else welcome(); }
   }
+  var prefetchedDeeper = {}; // song|lang keys already warmed in the background (so a language switch is instant)
   var CACHE_PREFIX = "sdd:cards:v" + ((CFG && CFG.VERSION) || "0") + ":";
   // Canonical key mirrors the server: same song -> same story, regardless of edition/feature noise.
   function ckNorm(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
@@ -439,6 +440,15 @@
         renderCovers(wrap, deeper.covers, deeper.original);   // "Covers", or "The original" + "Also covered by" when this track is itself a cover
         renderSimilarSongs(wrap, deeper.recos);   // "Similar songs" — 2 real Spotify links
         renderOfficialVideo(wrap, deeper.video);  // official YouTube/Vimeo video card at the very end
+        // Warm the OTHER language's "geeek deeper" in the background so switching is instant (no second wait).
+        // deepdive + captions already pre-generate both languages server-side; the deeper's Spanish depends on
+        // the English canonical, so we trigger it here as a fire-and-forget request that the server caches.
+        var _other = STORY_LANG === "es" ? "en" : "es";
+        var _pk = myKey + "|" + _other;
+        if (!prefetchedDeeper[_pk]) {
+          prefetchedDeeper[_pk] = 1;
+          fetch(CFG.API_BASE + "/deeper", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: t.title || "", artist: t.artist || "", album: t.album || "", seed: curStoryText || "", lang: _other }) }).catch(function () {});
+        }
       })
       .catch(function () {
         wrap.innerHTML = '<div class="st-deeper-note">' + esc(L("deeperErr")) + '</div>';

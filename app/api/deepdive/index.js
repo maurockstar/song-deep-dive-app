@@ -413,8 +413,18 @@ module.exports = async function (context, req) {
   }
 
   // Phase 2 (or single-call) — AI cards if a key is set, else open-data.
-  let ai = null;
-  if (apiKey) ai = await writeCardsWithClaude(apiKey, facts, context, lang);
+  // Generate the REQUESTED language AND the other language IN PARALLEL from the same facts, so a later
+  // language switch is instant (both cached) WITHOUT doubling the wait: two concurrent AI calls finish
+  // in ~one call's wall-time.
+  const otherLang = lang === "es" ? "en" : "es";
+  let ai = null, aiOther = null;
+  if (apiKey) {
+    const results = await Promise.all([
+      writeCardsWithClaude(apiKey, facts, context, lang),
+      writeCardsWithClaude(apiKey, facts, context, otherLang)
+    ]);
+    ai = results[0]; aiOther = results[1];
+  }
   const aiUsed = !!(ai && ai.cards && ai.cards.length);
   const cards = aiUsed ? ai.cards : templateCards(facts);
   const story = (aiUsed && ai.story) ? ai.story : templateStory(facts, cards);
@@ -426,9 +436,7 @@ module.exports = async function (context, req) {
   };
   capped(cache);
   if (aiUsed) {
-    // ONE canonical story per song: first request to finish LOCKS the story (SET NX). The AI is
-    // non-deterministic, so if two requests race, the loser adopts the winner's story instead of
-    // caching its own — every device/instance then converges to exactly one story.
+    // ONE canonical story per song per language: first request to finish LOCKS it (SET NX).
     const won = await sharedSetNX(skey, payload);
     if (!won) {
       const existing = await sharedGet(skey);
@@ -436,9 +444,21 @@ module.exports = async function (context, req) {
     }
     cache.set(memKey, payload);
   } else if (!apiKey) {
-    // No AI key -> template is the permanent fallback; cache it. (If a key exists but AI failed
-    // transiently, don't cache the template so the next request retries the AI.)
     cache.set(memKey, payload);
+  }
+
+  // Pre-cache the OTHER language so switching is instant (best-effort; never affects THIS response).
+  if (apiKey && aiOther && aiOther.cards && aiOther.cards.length) {
+    const oMemKey = otherLang === "es" ? key + "|es" : key;
+    const oSkey = "sdd:" + VERSION + (otherLang === "es" ? ":es:" : ":") + key;
+    const oPayload = {
+      track: { id: q.id, title: q.title, artist: q.artist },
+      cards: aiOther.cards,
+      story: aiOther.story ? aiOther.story : templateStory(facts, aiOther.cards),
+      _meta: { source: "ai+open-data", year: facts.year || null, generatedAt: new Date().toISOString() }
+    };
+    try { await sharedSetNX(oSkey, oPayload); } catch (e) {}
+    cache.set(oMemKey, oPayload);
   }
 
   context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: payload };
