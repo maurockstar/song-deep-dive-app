@@ -522,7 +522,21 @@
           var base = artBaseUrl(url); if (seen[base]) return; seen[base] = 1;
           imgs.push({ url: url, cap: it.title || t.artist || "", credit: it.credit || "" });
         }
-        items.forEach(function (it) { if (it && it.type === "photo") add(it); }); // ONLY real band/era photos (no album-cover filler)
+        items.forEach(function (it) { if (it && it.type === "photo") add(it); }); // real band/era photos first
+        // Album-era art fallback: photo-scarce eras (e.g. 70s Pink Floyd) can leave "geeek deeper" empty, so
+        // fill the remaining slots with the era's album art — the surrounding discography covers — excluding
+        // the now-playing album (already shown as the cover up top).
+        if (imgs.length < 3) {
+          var curAlbumName = (((cur && cur.album) || t.album || "")).toLowerCase().trim();
+          items.forEach(function (it) {
+            if (imgs.length >= 4) return;
+            if (!it || it.type !== "album") return;
+            var au = it.url || it.thumb; if (!au) return;
+            if ((it.title || "").toLowerCase().trim() === curAlbumName) return; // skip the now-playing album cover
+            var ab = artBaseUrl(au); if (seen[ab]) return; seen[ab] = 1;
+            imgs.push({ url: au, cap: it.title || "", credit: it.credit || "" });
+          });
+        }
         imgs = imgs.slice(0, 4);
         if (!imgs.length) return;
         var heads = wrap.querySelectorAll("h3.st-dh:not(.st-recos-h):not(.st-covers-h):not(.st-video-h)");
