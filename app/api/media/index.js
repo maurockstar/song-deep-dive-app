@@ -87,6 +87,7 @@ function wikiImg(origUrl, width) {
     const parts = origUrl.split("?")[0].split("/");
     let file = (origUrl.indexOf("/thumb/") > -1 && parts.length >= 2) ? parts[parts.length - 2] : parts[parts.length - 1];
     file = file.replace(/^(?:lossy-page\d+-)?\d+px-/, "");
+    try { file = decodeURIComponent(file); } catch (e) {} // path segment is already %-encoded; decode before re-encoding so "(" doesn't become %2528 (double-encoded -> 404)
     return "https://" + host + "/wiki/Special:FilePath/" + encodeURIComponent(file) + "?width=" + width;
   } catch (e) { return origUrl; }
 }
