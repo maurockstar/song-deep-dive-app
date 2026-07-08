@@ -22,7 +22,7 @@ const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "2.0"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "2.1"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -198,7 +198,7 @@ async function lastfmSimilar(title, artist) {
 async function gatherDeepFacts(title, artist, context, knownAlbum) {
   title = (songTitleBase(title).trim() || title); // drop "- Remastered 2015" / "(...)" so MusicBrainz + Wikipedia resolve
   knownAlbum = cleanAlbumName(knownAlbum);         // drop "(Remastered)" / "(Deluxe Edition)" etc
-  const f = { title, artist, year: "", mbArtist: "", album: "", albumAuthoritative: false, producer: "", engineer: "", writers: "", tags: "", wikiSong: "", wikiArtist: "", wikiAlbum: "" };
+  const f = { title, artist, year: "", mbArtist: "", album: "", albumAuthoritative: false, producer: "", engineer: "", writers: "", tags: "", wikiSong: "", wikiArtist: "", wikiAlbum: "", workId: "" };
   const creditMap = new Map();
 
   const rec = await bestRecording(title, artist);
@@ -224,6 +224,7 @@ async function gatherDeepFacts(title, artist, context, knownAlbum) {
         for (const rel of work.relations) { if (rel.artist && rel.type) addCredit(creditMap, rel.type, rel.artist.name); }
       }
     }
+    f.workId = workId;
   }
   f.producer = pickCredit(creditMap, ["producer"]);
   f.engineer = pickCredit(creditMap, ["engineer", "recording", "mix", "mastering"]);
@@ -287,7 +288,7 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     "NO ENCYCLOPEDIC RE-INTRODUCTION (critical): Never open a section with a dictionary or Wikipedia-style definition, and do NOT restate who the artist is, the release date, record label, or chart positions as if introducing them for the first time \u2014 the reader already knows the basics. Continue with fresh, flowing prose that goes DEEPER (craft, sound, meaning, context, legacy). The Wikipedia extracts in Facts are for factual accuracy ONLY \u2014 NEVER copy or paraphrase their wording.\n\n" +
     "HEADINGS: Use ONLY these section headings, verbatim: The song, The album, The era, Producer & engineer. Do NOT invent other headings (covers are handled separately, below). Never address data, sources, lookups, uncertainty or discrepancies — if unsure, silently omit.\n\n" +
     "SIMILAR SONGS (recos): Also pick FIVE candidate songs for discovery (the app shows only ones a listener can actually find on Spotify, best two). Rules: (1) EVERY pick is by a DIFFERENT artist than this song's artist AND different from each other — no repeats; (2) NOT from the same album, and NEVER a cover, remix, live version, re-recording or alternate version of THIS same song — recommend genuinely DIFFERENT songs; (3) gravitate to OTHER artists to help the listener discover new acts; (4) each must genuinely match this song's vibe — groove, era, tempo/beat, rhythm, energy and overall feel; (5) each needs a short complete one-line 'why' (<= 16 words) naming the shared musical quality. If a CANDIDATES list is given (real co-listening data), STRONGLY prefer picks from it. CRITICAL: only recommend songs you are highly confident actually exist and are correctly credited to that EXACT artist — never invent a song or mis-attribute a title to the wrong artist. When unsure, choose a more famous, safely-attributed song by a fitting artist that a listener can definitely find on Spotify.\n\n" +
-    "COVERS: Separately, list up to FOUR of the MOST FAMOUS real cover versions of THIS song, by OTHER artists (never the original artist). For each: the cover artist, the song title as they released it, and a 1-2 sentence story about that specific cover (what makes it notable — a hit, a reinvention, a famous live performance). Only real, well-known covers you are confident exist and are correctly attributed; if none are truly famous, return an empty covers array. Never invent a cover.\n\n" +
+    "COVERS: Separately, list up to FOUR of the MOST FAMOUS real cover versions of THIS song, by OTHER artists (never the original artist). A cover means the SAME COMPOSITION re-recorded by a different act \u2014 NOT a different song that merely shares the title; if you are not certain it is literally the same song (same writers, melody and lyrics), OMIT it. For each: the cover artist, the song title as they released it, and a 1-2 sentence story about that specific cover (what makes it notable — a hit, a reinvention, a famous live performance). Only real, well-known covers you are confident exist and are correctly attributed; if none are truly famous, return an empty covers array. Never invent a cover.\n\n" +
     "Output STRICT JSON only — no prose, no markdown fences.";
   const user =
     `Facts:\n${factsBlock(f)}\n\n` +
@@ -404,6 +405,37 @@ function cleanRecos(arr, songArtist) {
 }
 
 // Validate covers: up to 2 famous covers of THIS song, by OTHER artists, each with a short story.
+// Verify a suggested cover is a GENUINE cover: a recording of the SAME MusicBrainz work as the original,
+// not a different song that merely shares the title (e.g. The Cinematic Orchestra's "Breathe" is NOT a
+// cover of Pink Floyd's "Breathe (In the Air)"). Correctness-first: if we can't confirm it, we drop it.
+async function mbRecordingWorkIds(recId) {
+  const det = await jget(`${MB_BASE}/recording/${recId}?inc=work-rels&fmt=json`, { "User-Agent": MB_UA });
+  if (!det || !Array.isArray(det.relations)) return [];
+  return det.relations.filter(function (x) { return x.work && x.work.id; }).map(function (x) { return x.work.id; });
+}
+async function isGenuineCover(artist, title, workId) {
+  if (!workId || !artist || !title) return false;
+  const q = encodeURIComponent('recording:"' + title + '" AND artist:"' + artist + '"');
+  const sr = await jget(`${MB_BASE}/recording/?query=${q}&fmt=json&limit=6`, { "User-Agent": MB_UA });
+  const na = norm(primaryArtist(artist));
+  const recs = (((sr && sr.recordings) || []).filter(function (r) {
+    const credit = norm((r["artist-credit"] || []).map(function (a) { return a.name; }).join(" "));
+    return na && credit.indexOf(na) > -1;
+  })).slice(0, 2);
+  for (const r of recs) {
+    const works = await mbRecordingWorkIds(r.id);
+    if (works.indexOf(workId) > -1) return true;
+  }
+  return false;
+}
+async function verifyCovers(covers, workId) {
+  if (!Array.isArray(covers) || !covers.length) return [];
+  if (!workId) return [];  // no known work to verify against -> show none rather than risk a false positive
+  const checked = await Promise.all(covers.map(function (c) {
+    return isGenuineCover(c.artist, c.title, workId).then(function (ok) { return ok ? c : null; }).catch(function () { return null; });
+  }));
+  return checked.filter(Boolean);
+}
 function cleanCovers(arr, songArtist) {
   const pa = norm(primaryArtist(songArtist));
   const out = [], seen = {};
@@ -482,6 +514,9 @@ module.exports = async function (context, req) {
   }
   const aiUsed = !!(ai && ai.body && ai.body.length);
   const deeper = aiUsed ? ai : templateDeeper(facts, similarPool);
+  if (deeper && Array.isArray(deeper.covers) && deeper.covers.length) {
+    deeper.covers = await verifyCovers(deeper.covers, facts.workId); // keep only genuine same-work covers
+  }
   deeper.video = video || null; // official YouTube/Vimeo video for the song (or null)
 
   let payload = {
