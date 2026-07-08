@@ -438,9 +438,33 @@ function makeNameTier(artist, members) {
     }
     return false;
   };
+  // Distinctive words of OUR act (drop articles) so we can tell our act's own name from a foreign person.
+  const ART_STOP = { the:1,a:1,an:1,and:1,of:1,feat:1,featuring:1,with:1,los:1,las:1,les:1,die:1,der:1,das:1,la:1,le:1,el:1 };
+  const artWords = String(artist || "").toLowerCase().split(/[^a-z0-9\u00C0-\u00FF]+/).filter(function (w) { return w && !ART_STOP[w]; });
+  const isArtistName = function (name) {
+    if (!artWords.length) return false;
+    const low = (name || "").toLowerCase();
+    for (let i = 0; i < artWords.length; i++) { if (low.indexOf(artWords[i]) === -1) return false; }
+    return true;
+  };
+  // ROLE SAFEGUARD. A caption/filename that ties a specific PERSON to an instrument role ("Frank Guerrero
+  // Drummer Soda Infinito", "... on drums") asserts an individual. If that person is not a whitelisted
+  // member of our act (and is not our act's own name), the shot is of SOMEONE ELSE -- often a TRIBUTE/cover
+  // band that merely shares a word with our name (Soda Infinito vs Soda Stereo). Reject such photos.
+  const RL = "[Dd]rums?|[Dd]rummer|[Gg]uitars?|[Gg]uitarist|[Bb]ass|[Bb]assist|[Vv]ocals?|[Vv]ocalist|[Ss]inger|[Kk]eyboards?|[Kk]eyboardist|[Pp]ianist|[Pp]ercussion|[Pp]ercussionist|[Ss]axophone|[Ss]axophonist|[Vv]iolinist|[Cc]ellist|[Tt]rumpeter?|[Bb]ater[i\u00ed]a|[Bb]aterista|[Gg]uitarrista|[Bb]ajista|[Cc]antante|[Vv]ocalista|[Tt]ecladista|[Pp]ercusionista";
+  const NM = "[A-Z\u00C0-\u00DE][a-z\u00C0-\u00FF'\u2019.-]+(?:\\s+[A-Z\u00C0-\u00DE][a-z\u00C0-\u00FF'\u2019.-]+){1,2}";
+  const PERSON_ROLE = new RegExp("(" + NM + ")\\s*[,\\-\u2013\u2014]?\\s*(?:on|plays?|playing|en|toca)?\\s*(?:" + RL + ")(?![A-Za-z])");
+  const ROLE_PERSON = new RegExp("(?:" + RL + ")\\s*[,:\\-\u2013\u2014]?\\s*(?:of|by|de|del)\\s+(" + NM + ")");
+  const roleSubjectIsForeign = function (clean) {
+    const m = clean.match(PERSON_ROLE) || clean.match(ROLE_PERSON);
+    if (!m || !m[1]) return false;
+    const name = m[1].trim();
+    return !isArtistName(name) && !isMemberName(name);
+  };
   return function (clean) {
     const co = clean.match(CO);
     if (co && !isMemberName(co[1])) return -1;   // unverifiable second subject -> reject (namesake/legal safety)
+    if (roleSubjectIsForeign(clean)) return -1;  // named non-member in an instrument role -> foreign act (e.g. tribute band)
     if (artRe && artRe.test(clean)) return 0;
     for (let i = 0; i < memberRes.length; i++) {
       const res = memberRes[i];
@@ -472,7 +496,7 @@ module.exports = async function (context, req) {
       } while (cursor && cursor !== "0" && ++guard < 200);
       return total;
     };
-    const vis = (await scanDel("sdd:vis:4:" + a + "|*")) + (await scanDel("sdd:vis:3:" + a + "|*"));
+    const vis = (await scanDel("sdd:vis:5:" + a + "|*")) + (await scanDel("sdd:vis:4:" + a + "|*")) + (await scanDel("sdd:vis:3:" + a + "|*"));
     const cap = await scanDel("sdd:cap:5:" + a + "|*");
     let mem = 0; for (const k of Array.from(cache.keys())) { if (k.indexOf(a + "|") === 0) { cache.delete(k); mem++; } }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { ok: true, artist: who, purged: { vis: vis, cap: cap, mem: mem } } };
@@ -567,7 +591,7 @@ module.exports = async function (context, req) {
   let curated = ranked;
   const visMeta = {};
   if (apiKey && ranked.length >= 2) {
-    const visKey = "sdd:vis:4:" + key; // v4 2026-07-08: era-FIRST lead-photo curation (bump if the prompt changes)
+    const visKey = "sdd:vis:5:" + key; // v4 2026-07-08: era-FIRST lead-photo curation (bump if the prompt changes)
     let order = await capGet(visKey);
     if (order) { visMeta.visStatus = "cache"; }
     if (!order) {
