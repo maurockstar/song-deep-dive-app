@@ -476,26 +476,33 @@
   }
   // "Covers" — up to 2 famous covers of THIS song: a short story then a Spotify button, per the user's flow.
   // "Covers" — same rule: show a cover only when it resolves to a real, playable Spotify track.
-  function renderCoverSection(wrap, list, limit, heading) {
-    if (!wrap || !list || !list.length) return;
-    var sec = document.createElement("div"); sec.className = "st-recos st-covers"; wrap.appendChild(sec); // placeholder appended synchronously to keep section order
-    resolveCandidates(list, limit).then(function (matched) {
-      if (!matched.length) { if (sec.parentNode) sec.parentNode.removeChild(sec); return; }
-      var h = document.createElement("h3"); h.className = "st-dh st-covers-h"; h.textContent = heading; sec.appendChild(h);
-      matched.forEach(function (m) {
-        if (m.cand.story) { var pp = document.createElement("p"); pp.className = "st-p"; pp.textContent = m.cand.story; sec.appendChild(pp); }
-        sec.appendChild(buildRecoButton(m.cand.title, m.cand.artist, null, m.track));
-      });
-    });
-  }
-  // If the now-playing track is itself a cover, lead with "The original" (the source version) and list the
-  // rest as "Also covered by". Otherwise the usual "Covers" of THIS original song.
+  // "Related songs": if the now-playing track IS the original, list the covers of it. If it is itself a cover,
+  // say so and link to the original plus other covers. One section, heading "Related songs".
   function renderCovers(wrap, covers, original) {
-    if (original && original.artist && original.title) {
-      renderCoverSection(wrap, [original], 1, "The original");
-      renderCoverSection(wrap, covers, 2, "Also covered by");
+    var isCover = !!(original && original.artist && original.title);
+    var hasCovers = !!(covers && covers.length);
+    if (!wrap || (!isCover && !hasCovers)) return;
+    var sec = document.createElement("div"); sec.className = "st-recos st-covers"; wrap.appendChild(sec); // placeholder appended synchronously to keep section order
+    function heading() { var h = document.createElement("h3"); h.className = "st-dh st-covers-h"; h.textContent = "Related songs"; sec.appendChild(h); }
+    function subLabel(t) { var d = document.createElement("div"); d.className = "st-sublabel"; d.textContent = t; sec.appendChild(d); }
+    function item(m) { if (m.cand.story) { var pp = document.createElement("p"); pp.className = "st-p"; pp.textContent = m.cand.story; sec.appendChild(pp); } sec.appendChild(buildRecoButton(m.cand.title, m.cand.artist, null, m.track)); }
+    if (isCover) {
+      Promise.all([resolveCandidates([original], 1), hasCovers ? resolveCandidates(covers, 2) : Promise.resolve([])]).then(function (res) {
+        var oM = res[0], cM = res[1];
+        if (!oM.length && !cM.length) { if (sec.parentNode) sec.parentNode.removeChild(sec); return; }
+        heading();
+        var note = document.createElement("p"); note.className = "st-p";
+        note.textContent = "This version is a cover" + (oM.length ? " \u2014 here's the original" + (cM.length ? " and other renditions:" : ":") : ".");
+        sec.appendChild(note);
+        if (oM.length) { subLabel("The original"); item(oM[0]); }
+        if (cM.length) { subLabel("Other covers"); cM.forEach(item); }
+      });
     } else {
-      renderCoverSection(wrap, covers, 2, "Covers");
+      resolveCandidates(covers, 2).then(function (matched) {
+        if (!matched.length) { if (sec.parentNode) sec.parentNode.removeChild(sec); return; }
+        heading();
+        matched.forEach(item);
+      });
     }
   }
   // Official video card at the very end of "geeek deeper": a clickable thumbnail with the platform logo
