@@ -92,6 +92,22 @@ function wikiImg(origUrl, width) {
   } catch (e) { return origUrl; }
 }
 
+// iTunes: does the TRACK-level artist match our artist?
+function itArtistOk(r, pa) {
+  const an = nrm(r.artistName || "");
+  return !pa || !an || an.indexOf(pa) > -1 || pa.indexOf(an) > -1;
+}
+// iTunes: is the COLLECTION genuinely our artist's release, not a DJ mix / "Various Artists" /
+// compilation credited to a DIFFERENT act (whose cover art has nothing to do with our band)?
+// A track BY our artist can live on such a comp; its collection cover would misrepresent the band.
+function itCollectionOk(r, pa) {
+  const ca = nrm(r.collectionArtistName || "");
+  if (ca && pa && ca.indexOf(pa) === -1 && pa.indexOf(ca) === -1) return false;
+  const s = ((r.collectionName || "") + " " + (r.trackName || "")).toLowerCase();
+  if (/\bdj mix\b|\(mixed\)|\bvarious artists\b|\bcompilation\b/.test(s)) return false;
+  return true;
+}
+
 // iTunes albums, restricted to the primary artist (gallery only).
 async function albums(artist) {
   if (!artist) return [];
@@ -101,8 +117,7 @@ async function albums(artist) {
   const seen = {}, out = [];
   for (const r of results) {
     if (!r.artworkUrl100 || !r.collectionName) continue;
-    const an = nrm(r.artistName || "");
-    if (pa && an && an.indexOf(pa) === -1 && pa.indexOf(an) === -1) continue;
+    if (!itArtistOk(r, pa) || !itCollectionOk(r, pa)) continue;
     const key = baseAlbumKey(r.collectionName);
     if (!key || seen[key]) continue;
     seen[key] = 1;
@@ -115,10 +130,13 @@ async function albums(artist) {
 async function songCover(title, artist) {
   if (!title) return null;
   const pa = nrm(primaryArtist(artist));
-  const d = await jget(ITUNES + "?term=" + encodeURIComponent((artist ? artist + " " : "") + title) + "&entity=song&media=music&limit=3", {});
+  const d = await jget(ITUNES + "?term=" + encodeURIComponent((artist ? artist + " " : "") + title) + "&entity=song&media=music&limit=5", {});
   const results = (d && d.results) || [];
-  const r = results.find(function (x) { const an = nrm(x.artistName || ""); return !pa || !an || an.indexOf(pa) > -1 || pa.indexOf(an) > -1; }) || null;
-  if (!r || !r.artworkUrl100) return null;
+  // The TRACK may be by our artist while the COLLECTION is a DJ mix / compilation credited to a
+  // different act, whose cover art is unrelated to this band. Require BOTH to match; if none is
+  // clean, return null (no art) rather than a wrong act's cover.
+  const r = results.find(function (x) { return x.artworkUrl100 && itArtistOk(x, pa) && itCollectionOk(x, pa); }) || null;
+  if (!r) return null;
   return { type: "album", url: hi(r.artworkUrl100, 1400), thumb: hi(r.artworkUrl100, 200), title: r.collectionName || title, credit: "Apple Music" };
 }
 
