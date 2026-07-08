@@ -350,6 +350,30 @@
       return res.ok || res.status === 204;
     } catch (e) { return false; }
   }
+  // Activate the in-browser SDK player element within the user's tap (mobile autoplay policy).
+  function activateSdk() { try { if (sdkPlayer && sdkPlayer.activateElement) sdkPlayer.activateElement(); } catch (e) {} }
+  // Start playback of specific track URIs. Prefer geeek's own in-browser SDK device (plays inside the app);
+  // otherwise the user's active/available Spotify Connect device. Needs user-modify-playback-state.
+  async function playUris(uris) {
+    var token = await getAccessToken();
+    if (!token) return { ok: false, reason: "no-auth" };
+    var deviceId = sdkAvailable() ? sdkDeviceId : await ensureDeviceId();
+    var url = API + "/me/player/play" + (deviceId ? ("?device_id=" + encodeURIComponent(deviceId)) : "");
+    try {
+      var res = await fetch(url, { method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ uris: uris }) });
+      if (res.ok || res.status === 204) return { ok: true, deviceId: deviceId };
+      if (res.status === 404) return { ok: false, reason: "no-device" };
+      return { ok: false, reason: "http-" + res.status };
+    } catch (e) { return { ok: false, reason: "network" }; }
+  }
+  // Resolve a searched title/artist to a REAL Spotify track and PLAY it now (exact match first, then top search hit).
+  async function playTrack(title, artist) {
+    var t = await resolveTrack(title, artist);
+    var uri = t && t.uri;
+    if (!uri) { var st = await searchTrack(title, artist); uri = st && st.uri; }
+    if (!uri) return { ok: false, reason: "not-found" };
+    return playUris([uri]);
+  }
 
   // ---------- Liked Songs (user library) — needs user-library-read / user-library-modify ----------
   // Uses the current /me/library endpoints (uris=spotify:track:ID). The old /me/tracks family is deprecated (403).
@@ -388,6 +412,6 @@
     } catch (e) { return 0; }
   }
 
-  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl, queueTrack: queueTrack, resolveTrack: resolveTrack, queueUri: queueUri, sdkAvailable: sdkAvailable, playHere: playHere, sdkNeedsReconnect: sdkNeedsReconnect, initSdkPlayer: initSdkPlayer, isSaved: isSaved, saveTrack: saveTrack, removeTrack: removeTrack };
+  window.SDD.spotify = { login: login, handleRedirect: handleRedirect, getAccessToken: getAccessToken, isConnected: isConnected, logout: logout, searchTrackUrl: searchTrackUrl, queueTrack: queueTrack, resolveTrack: resolveTrack, queueUri: queueUri, sdkAvailable: sdkAvailable, playHere: playHere, sdkNeedsReconnect: sdkNeedsReconnect, initSdkPlayer: initSdkPlayer, isSaved: isSaved, saveTrack: saveTrack, removeTrack: removeTrack, activateSdk: activateSdk, playUris: playUris, playTrack: playTrack };
   window.SDD.player = { spotify: spotifyPlayer, setActivePlayer: setActivePlayer, getActivePlayer: getActivePlayer, control: playerControl };
 })();

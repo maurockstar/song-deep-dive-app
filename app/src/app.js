@@ -1067,6 +1067,20 @@
   // after which geeek controls it directly). Done synchronously from the tap so iOS doesn't block the launch.
   // Pausing, and everything on desktop, use the normal Web API transport.
   function playPause() {
+    // A song found via SEARCH (manual mode) isn't playing yet -> START it on Spotify (in-app SDK device when
+    // available, else the user's active Spotify device). This is what makes the play button work after a search.
+    if (manualMode && cur && cur.title && S.playTrack) {
+      if (S.activateSdk) S.activateSdk();                 // within this tap, for mobile autoplay
+      playing = true; setPlayIcon(true); pstate.playing = true; pstate.at = Date.now(); // optimistic
+      S.playTrack(cur.title, cur.artist).then(function (r) {
+        if (r && r.ok) { manualMode = false; setTimeout(poll, 1200); } // now really playing -> let the poll sync it
+        else {
+          playing = false; setPlayIcon(false); pstate.playing = false;
+          flashPmsg((r && r.reason === "no-device") ? "Open Spotify on any device, then press play again." : "Couldn't start that song on Spotify.");
+        }
+      });
+      return;
+    }
     // On a phone, RESUME the user's real queue AT POSITION right inside geeek, using geeek's own in-browser
     // Spotify player — no app switch, no restart, queue intact. (Premium + the "streaming" scope; reconnect once.)
     if (!playing && onMobileDevice() && S.sdkAvailable && S.sdkAvailable()) {
