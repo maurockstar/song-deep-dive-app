@@ -453,8 +453,10 @@ function makeNameTier(artist, members) {
   // band that merely shares a word with our name (Soda Infinito vs Soda Stereo). Reject such photos.
   const RL = "[Dd]rums?|[Dd]rummer|[Gg]uitars?|[Gg]uitarist|[Bb]ass|[Bb]assist|[Vv]ocals?|[Vv]ocalist|[Ss]inger|[Kk]eyboards?|[Kk]eyboardist|[Pp]ianist|[Pp]ercussion|[Pp]ercussionist|[Ss]axophone|[Ss]axophonist|[Vv]iolinist|[Cc]ellist|[Tt]rumpeter?|[Bb]ater[i\u00ed]a|[Bb]aterista|[Gg]uitarrista|[Bb]ajista|[Cc]antante|[Vv]ocalista|[Tt]ecladista|[Pp]ercusionista";
   const NM = "[A-Z\u00C0-\u00DE][a-z\u00C0-\u00FF'\u2019.-]+(?:\\s+[A-Z\u00C0-\u00DE][a-z\u00C0-\u00FF'\u2019.-]+){1,2}";
-  const PERSON_ROLE = new RegExp("(" + NM + ")\\s*[,\\-\u2013\u2014]?\\s*(?:on|plays?|playing|en|toca)?\\s*(?:" + RL + ")(?![A-Za-z])");
-  const ROLE_PERSON = new RegExp("(?:" + RL + ")\\s*[,:\\-\u2013\u2014]?\\s*(?:of|by|de|del)\\s+(" + NM + ")");
+  const SEP = "[\\s(),.\\-\u2013\u2014:;/]*"; // name<->role gap may be spaces OR punctuation, incl "(" — but never another word
+  const FILL = "(?:on|plays?|playing|en|toca|el|la|the|de|del)?";
+  const PERSON_ROLE = new RegExp("(" + NM + ")" + SEP + FILL + SEP + "(?:" + RL + ")(?![A-Za-z])");
+  const ROLE_PERSON = new RegExp("(?:" + RL + ")" + SEP + "(?:of|by|de|del)\\s+(" + NM + ")");
   const roleSubjectIsForeign = function (clean) {
     const m = clean.match(PERSON_ROLE) || clean.match(ROLE_PERSON);
     if (!m || !m[1]) return false;
@@ -496,7 +498,7 @@ module.exports = async function (context, req) {
       } while (cursor && cursor !== "0" && ++guard < 200);
       return total;
     };
-    const vis = (await scanDel("sdd:vis:5:" + a + "|*")) + (await scanDel("sdd:vis:4:" + a + "|*")) + (await scanDel("sdd:vis:3:" + a + "|*"));
+    const vis = (await scanDel("sdd:vis:6:" + a + "|*")) + (await scanDel("sdd:vis:5:" + a + "|*")) + (await scanDel("sdd:vis:4:" + a + "|*")) + (await scanDel("sdd:vis:3:" + a + "|*"));
     const cap = await scanDel("sdd:cap:5:" + a + "|*");
     let mem = 0; for (const k of Array.from(cache.keys())) { if (k.indexOf(a + "|") === 0) { cache.delete(k); mem++; } }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { ok: true, artist: who, purged: { vis: vis, cap: cap, mem: mem } } };
@@ -591,7 +593,7 @@ module.exports = async function (context, req) {
   let curated = ranked;
   const visMeta = {};
   if (apiKey && ranked.length >= 2) {
-    const visKey = "sdd:vis:5:" + key; // v4 2026-07-08: era-FIRST lead-photo curation (bump if the prompt changes)
+    const visKey = "sdd:vis:6:" + key; // v4 2026-07-08: era-FIRST lead-photo curation (bump if the prompt changes)
     let order = await capGet(visKey);
     if (order) { visMeta.visStatus = "cache"; }
     if (!order) {

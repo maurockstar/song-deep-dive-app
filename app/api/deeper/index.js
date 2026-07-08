@@ -22,7 +22,7 @@ const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "2.5"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "2.6"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -426,7 +426,7 @@ function clipWhy(w) {
 function cleanRecos(arr, songArtist) {
   // Backstop for the prompt: reject picks whose stated reason is language/nationality-only or a
   // self-admitted genre mismatch (e.g. "Spanish-language ... despite different subgenre").
-  const BAD_WHY = /\bdespite\b|\beven though\b|different\s+(?:sub-?)?genre|different\s+style|another\s+genre|same\s+language|shared\s+language|spanish[- ]?language|both\s+(?:are\s+)?(?:latin|hispanic|latino)|latin[- ]?american|same\s+(?:country|nationality|region)/i;
+  const BAD_WHY = /\bdespite\b|\beven though\b|different\s+(?:sub-?)?genre|different\s+style|another\s+genre|\bonly\b[^.]*\bin common\b|(?:same|shared)\s+language|(?:same|shared)\s+(?:country|nationality)|merely\s+(?:latin|hispanic|spanish|regional)/i;
   const pa = norm(primaryArtist(songArtist));
   const out = [], seen = {};
   (Array.isArray(arr) ? arr : []).forEach(function (r) {
