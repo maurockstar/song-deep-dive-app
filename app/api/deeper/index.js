@@ -522,30 +522,8 @@ function templateDeeper(f, similarPool) {
   return { body, recos, covers: [] };
 }
 
-module.exports = async function (context, req) {
-  if (A.blockIfUnauthed(context, req)) return;
-  const q = {
-    title: ((req.query && req.query.title) || (req.body && req.body.title) || "").trim(),
-    artist: ((req.query && req.query.artist) || (req.body && req.body.artist) || "").trim()
-  };
-  const seed = String((req.body && req.body.seed) || (req.query && req.query.seed) || "").slice(0, 2000);
-  const knownAlbum = String((req.body && req.body.album) || (req.query && req.query.album) || "").slice(0, 200);
-  if (!q.title) { context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Provide ?title=" } }; return; }
-
-  const key = cacheKey(q);
-  const skey = "sdd:deep:" + VERSION + ":" + key;
-
-  if (cache.has(key)) {
-    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: cache.get(key) };
-    return;
-  }
-  const shared = await sharedGet(skey);
-  if (shared && shared.deeper && shared.deeper.body && shared.deeper.body.length) {
-    cache.set(key, shared);
-    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: shared };
-    return;
-  }
-
+// Build the canonical ENGLISH deeper payload (facts -> AI -> cover/original verification -> assembled payload).
+async function buildDeeperEN(q, seed, knownAlbum, context) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const [facts, similarPool, video] = await Promise.all([
     gatherDeepFacts(q.title, q.artist, context, knownAlbum),
@@ -556,17 +534,14 @@ module.exports = async function (context, req) {
   let ai = null;
   if (apiKey) {
     ai = await writeDeeperWithClaude(apiKey, facts, seed, similarPool, context);
-    if (!(ai && ai.body && ai.body.length)) { await new Promise(function (r) { setTimeout(r, 800); }); ai = await writeDeeperWithClaude(apiKey, facts, seed, similarPool, context); } // one retry so a transient AI overload does not dump the reader into the bare template
+    if (!(ai && ai.body && ai.body.length)) { await new Promise(function (r) { setTimeout(r, 800); }); ai = await writeDeeperWithClaude(apiKey, facts, seed, similarPool, context); }
   }
   const aiUsed = !!(ai && ai.body && ai.body.length);
   const deeper = aiUsed ? ai : templateDeeper(facts, similarPool);
-  // When THIS playing version is a cover, verify the AI-named "original" is a genuine recording of the same work.
   if (deeper && deeper.original && deeper.original.artist) {
     const okOrig = await isGenuineCover(deeper.original.artist, deeper.original.title, facts.workId);
     if (!okOrig) deeper.original = null;
   }
-  // Deterministic fallback: if the AI missed it but the Writer is a DIFFERENT act who actually recorded this
-  // work (a singer-songwriter original, e.g. Dylan/Cohen), treat THIS as a cover and name the writer as the original.
   if (deeper && !deeper.original && facts.workId && facts.writers && facts.artist) {
     const wr = primaryArtist(facts.writers);
     const perf = norm(primaryArtist(facts.artist));
@@ -575,29 +550,114 @@ module.exports = async function (context, req) {
     }
   }
   if (deeper && Array.isArray(deeper.covers) && deeper.covers.length) {
-    deeper.covers = await verifyCovers(deeper.covers, facts.workId); // keep only genuine same-work covers
-    if (deeper.original && deeper.original.artist) {                  // never repeat the original inside the covers list
+    deeper.covers = await verifyCovers(deeper.covers, facts.workId);
+    if (deeper.original && deeper.original.artist) {
       const _oa = norm(primaryArtist(deeper.original.artist));
       deeper.covers = deeper.covers.filter(function (c) { return norm(primaryArtist(c.artist)) !== _oa; });
     }
   }
   if (deeper && deeper.original === undefined) deeper.original = null;
-  deeper.video = video || null; // official YouTube/Vimeo video for the song (or null)
-
-  let payload = {
+  deeper.video = video || null;
+  return {
     track: { title: q.title, artist: q.artist },
-    deeper,
+    deeper: deeper,
     _meta: { source: aiUsed ? "ai+open-data" : "open-data (add ANTHROPIC_API_KEY for AI)", candidates: (similarPool || []).length, year: facts.year || null, generatedAt: new Date().toISOString() }
   };
+}
 
+// Localize an already-built ENGLISH deeper into native Latin American Spanish WITHOUT changing any pick:
+// same recos/covers/original/video; only the prose (body + why + cover/original stories) is rewritten in Spanish.
+async function localizeDeeperSpanish(apiKey, enDeeper, seed, context) {
+  if (!apiKey || !enDeeper || !Array.isArray(enDeeper.body) || !enDeeper.body.length) return null;
+  const recos = Array.isArray(enDeeper.recos) ? enDeeper.recos : [];
+  const covers = Array.isArray(enDeeper.covers) ? enDeeper.covers : [];
+  const original = (enDeeper.original && enDeeper.original.artist) ? enDeeper.original : null;
+  const inBlock = {
+    body: enDeeper.body,
+    recos: recos.map(function (r) { return { title: r.title, artist: r.artist, why: r.why || "" }; }),
+    covers: covers.map(function (c) { return { artist: c.artist, title: c.title, story: c.story || "" }; }),
+    original: original ? { artist: original.artist, title: original.title, story: original.story || "" } : null
+  };
+  const system =
+    "You are a native Latin American Spanish music writer. You receive an English 'go deeper' long-read (as JSON) plus its recommended songs, covers and original. " +
+    "Re-express it in natural, idiomatic, NEUTRAL Latin American Spanish (NOT from Spain, NOT machine-translated) with exactly the same voice, facts, meaning, structure and order — as if it had been written in Spanish from the start. Translate the section HEADINGS to Spanish (e.g. 'The song'->'La canción', 'The album'->'El álbum', 'The era'->'La época', 'Producer & engineer'->'Productor e ingeniero'). " +
+    "Keep song titles, album names, band/artist and people's names in their ORIGINAL language. Do NOT add, remove, reorder or change any recommended song, cover or original — only write their Spanish 'why'/'story' text, keeping the SAME array length and order as the input. Do not reproduce lyrics. Output STRICT JSON only, no markdown fences.";
+  const user =
+    "English deeper to render fully in Spanish:\n" + JSON.stringify(inBlock) + "\n\n" +
+    "Return STRICT JSON exactly in this shape: {\"body\":[{\"type\":\"h|p|quote\",\"text\":\"...\"}],\"recos\":[{\"why\":\"...\"}],\"covers\":[{\"story\":\"...\"}],\"original\":{\"story\":\"...\"}}. " +
+    "recos and covers MUST have the same number of items and the same order as the input; original is null if the input original is null. Only the values are Spanish.";
+  const body = { model: ANTHROPIC_MODEL, max_tokens: 2000, system: system, messages: [{ role: "user", content: user }] };
+  const ctrl = new AbortController();
+  const timer = setTimeout(function () { ctrl.abort(); }, 30000);
+  try {
+    const r = await fetch(ANTHROPIC_URL, { method: "POST", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal });
+    if (!r.ok) { context.log("anthropic es http", r.status); return null; }
+    const data = await r.json();
+    const text = (data.content && data.content[0] && data.content[0].text) || "";
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    if (!parsed || !Array.isArray(parsed.body) || !parsed.body.length) return null;
+    const esRecos = recos.map(function (r, i) { const w = parsed.recos && parsed.recos[i] && parsed.recos[i].why; return Object.assign({}, r, { why: w ? String(w) : (r.why || "") }); });
+    const esCovers = covers.map(function (c, i) { const st = parsed.covers && parsed.covers[i] && parsed.covers[i].story; return Object.assign({}, c, { story: st ? String(st) : (c.story || "") }); });
+    const esOriginal = original ? Object.assign({}, original, { story: (parsed.original && parsed.original.story) ? String(parsed.original.story) : (original.story || "") }) : (enDeeper.original === undefined ? null : enDeeper.original);
+    return { body: parsed.body, recos: esRecos, covers: esCovers, original: esOriginal, video: enDeeper.video || null };
+  } catch (e) { context.log("anthropic es error", e.message); return null; } finally { clearTimeout(timer); }
+}
+
+module.exports = async function (context, req) {
+  if (A.blockIfUnauthed(context, req)) return;
+  const q = {
+    title: ((req.query && req.query.title) || (req.body && req.body.title) || "").trim(),
+    artist: ((req.query && req.query.artist) || (req.body && req.body.artist) || "").trim()
+  };
+  const seed = String((req.body && req.body.seed) || (req.query && req.query.seed) || "").slice(0, 2000);
+  const knownAlbum = String((req.body && req.body.album) || (req.query && req.query.album) || "").slice(0, 200);
+  const lang = ((((req.body && req.body.lang) || (req.query && req.query.lang)) === "es")) ? "es" : "en";
+  if (!q.title) { context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Provide ?title=" } }; return; }
+
+  const key = cacheKey(q);
+  const memKey = lang === "es" ? key + "|es" : key;
+  const skey = "sdd:deep:" + VERSION + (lang === "es" ? ":es:" : ":") + key;
+  const ok = function (payload) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: payload }; };
+
+  if (cache.has(memKey)) { ok(cache.get(memKey)); return; }
+  const shared = await sharedGet(skey);
+  if (shared && shared.deeper && shared.deeper.body && shared.deeper.body.length) { cache.set(memKey, shared); ok(shared); return; }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   capped(cache);
+
+  if (lang === "es") {
+    // Bind Spanish to the SAME picks as the English canonical: reuse/generate EN, then localize the prose only.
+    const skeyEn = "sdd:deep:" + VERSION + ":" + key;
+    let en = cache.get(key);
+    if (!(en && en.deeper && en.deeper.body && en.deeper.body.length)) en = await sharedGet(skeyEn);
+    if (!(en && en.deeper && en.deeper.body && en.deeper.body.length)) {
+      en = await buildDeeperEN(q, seed, knownAlbum, context);
+      if (en && en._meta && String(en._meta.source || "").indexOf("ai") === 0) { await sharedSetNX(skeyEn, en); cache.set(key, en); }
+    }
+    let payload = en;
+    if (apiKey && en && en.deeper && en.deeper.body && en.deeper.body.length) {
+      const es = await localizeDeeperSpanish(apiKey, en.deeper, seed, context);
+      if (es) {
+        payload = { track: en.track, deeper: es, _meta: Object.assign({}, en._meta || {}, { lang: "es", localizedAt: new Date().toISOString() }) };
+        await sharedSetNX(skey, payload);
+        cache.set(memKey, payload);
+      }
+    }
+    ok(payload); return;
+  }
+
+  // English
+  let payload = await buildDeeperEN(q, seed, knownAlbum, context);
+  const aiUsed = !!(payload && payload._meta && String(payload._meta.source || "").indexOf("ai") === 0);
   if (aiUsed) {
     const won = await sharedSetNX(skey, payload);
     if (!won) { const existing = await sharedGet(skey); if (existing && existing.deeper && existing.deeper.body && existing.deeper.body.length) payload = existing; }
-    cache.set(key, payload);
+    cache.set(memKey, payload);
   } else if (!apiKey) {
-    cache.set(key, payload);
+    cache.set(memKey, payload);
   }
-
-  context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: payload };
+  ok(payload);
 };

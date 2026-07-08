@@ -188,7 +188,10 @@ function factsBlock(f) {
   return s;
 }
 
-async function writeCardsWithClaude(apiKey, f, context) {
+async function writeCardsWithClaude(apiKey, f, context, lang) {
+  const langRule = (lang === "es")
+    ? " WRITE IN SPANISH (critical): compose EVERY JSON string VALUE in natural, native Latin American Spanish \u2014 a neutral pan-Latin-American register, NOT from Spain and NOT machine-translated. Keep the same warm, curious, vivid voice; write as a bilingual native music journalist would: idiomatic, flowing, grammatically correct. Keep song titles, album names, band/artist names and people's names in their ORIGINAL language; do not translate proper nouns and do not mix in stray English. Keep the JSON KEYS exactly as specified (in English); only the VALUES are in Spanish."
+    : "";
   const system =
     "You are a warm, knowledgeable music writer creating short 'deep dive' cards for someone who is listening to this song right now. " +
     "Your goal: spark curiosity and joy about the music they love, and — where it feels natural — gently remind them that the best thing to do next is to go live life: feel it, share it, get outside. Never force that nudge.\n\n" +
@@ -198,7 +201,7 @@ async function writeCardsWithClaude(apiKey, f, context) {
     "- NEVER fabricate specific credits, collaborators, chart positions, dates, lyrics, or quotes you are not confident are correct. When unsure about a specific, stay general or leave it out. Accuracy beats flourish.\n" +
     "- If the facts are thin AND you genuinely do not recognize the song, be honest and keep it general rather than inventing details.\n" +
     "- Do not reproduce song lyrics.\n\n" +
-    "Output STRICT JSON only — no prose, no markdown fences.";
+    "Output STRICT JSON only — no prose, no markdown fences." + langRule;
   const user =
     `Facts:\n${factsBlock(f)}\n\n` +
     `Write BOTH an editorial "story" (a short long-read) AND five compact "cards", as STRICT JSON in exactly this shape. Ground every name, date and credit in the facts; you may add well-known context; never fabricate specifics or reproduce lyrics. Keep it vivid and concise:\n` +
@@ -369,18 +372,20 @@ module.exports = async function (context, req) {
   }
 
   const key = cacheKey(q);
-  const skey = "sdd:" + VERSION + ":" + key; // shared-cache key (versioned)
+  const lang = (req.query && req.query.lang === "es") ? "es" : "en";
+  const memKey = lang === "es" ? key + "|es" : key;                 // in-memory cache is per-language
+  const skey = "sdd:" + VERSION + (lang === "es" ? ":es:" : ":") + key; // shared-cache key (versioned, per-language)
 
   // A finished (AI or final) payload always wins — instant.
-  if (cache.has(key)) {
-    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: cache.get(key) };
+  if (cache.has(memKey)) {
+    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: cache.get(memKey) };
     return;
   }
 
   // Shared cross-user cache: if anyone has already generated this song, serve it instantly.
   const shared = await sharedGet(skey);
   if (shared && shared.cards && shared.cards.length) {
-    cache.set(key, shared);
+    cache.set(memKey, shared);
     context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: shared };
     return;
   }
@@ -409,7 +414,7 @@ module.exports = async function (context, req) {
 
   // Phase 2 (or single-call) — AI cards if a key is set, else open-data.
   let ai = null;
-  if (apiKey) ai = await writeCardsWithClaude(apiKey, facts, context);
+  if (apiKey) ai = await writeCardsWithClaude(apiKey, facts, context, lang);
   const aiUsed = !!(ai && ai.cards && ai.cards.length);
   const cards = aiUsed ? ai.cards : templateCards(facts);
   const story = (aiUsed && ai.story) ? ai.story : templateStory(facts, cards);
@@ -429,11 +434,11 @@ module.exports = async function (context, req) {
       const existing = await sharedGet(skey);
       if (existing && existing.cards && existing.cards.length) payload = existing;
     }
-    cache.set(key, payload);
+    cache.set(memKey, payload);
   } else if (!apiKey) {
     // No AI key -> template is the permanent fallback; cache it. (If a key exists but AI failed
     // transiently, don't cache the template so the next request retries the AI.)
-    cache.set(key, payload);
+    cache.set(memKey, payload);
   }
 
   context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: payload };

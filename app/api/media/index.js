@@ -312,10 +312,13 @@ function cleanTitle(cap, artist) {
 }
 
 // One batched Claude call -> a short "who/what + link to the song" title per photo (no year; added later).
-async function smartCaptions(apiKey, ctx, arr) {
+async function smartCaptions(apiKey, ctx, arr, lang) {
   if (!apiKey || !arr.length) return null;
   const list = arr.map(function (c, i) { return (i + 1) + ". " + c; }).join("\n");
-  const system = "You caption photos for a music app. Each image is given by its Wikimedia filename. For each, write a SHORT title (max 6 words) that says WHO or WHAT the photo shows and, when clear, how it connects to the song or artist. Rules: if the filename names an iconic venue or festival (Woodstock, Glastonbury, the Fillmore, Royal Albert Hall, Budokan...), NAME IT — those magic moments are the point; NEVER add a decade or era phrase (no \"Seventies era\", \"1970s\", or \"... era\") because the photo's own year is shown separately and an era guess can contradict it; describe WHO or WHAT the photo shows instead; NO year or date digits (added separately); do NOT invent — use only the filename plus well-known facts, and when unclear fall back to a clean generic like the artist/band name or \"On stage\" / \"In the studio\"; these are PHOTOS OF THE ARTIST/BAND, NEVER album artwork — never output \"album cover\", \"cover\" or \"artwork\"; if the filename contains the album title, treat it as the era/context or a publicity/press shot (e.g. a 1975 publicity shot), NOT the cover; prefer descriptive filename words (publicity, press, portrait, live, backstage, festival); no trailing punctuation; Title Case. Output STRICT JSON: an array of strings, exactly one per image, same order.";
+  const esRule = (lang === "es")
+    ? " WRITE THE CAPTIONS IN SPANISH: each title must be in natural, neutral Latin American Spanish (not from Spain, not machine-translated), still max 6 words, Mayúscula Inicial en las palabras principales. Keep venue names, band/artist and people's names in their ORIGINAL language (e.g. 'En vivo en Woodstock', 'En el estudio', 'Retrato de la banda'). Never add a year. Same rules otherwise."
+    : "";
+  const system = "You caption photos for a music app. Each image is given by its Wikimedia filename. For each, write a SHORT title (max 6 words) that says WHO or WHAT the photo shows and, when clear, how it connects to the song or artist. Rules: if the filename names an iconic venue or festival (Woodstock, Glastonbury, the Fillmore, Royal Albert Hall, Budokan...), NAME IT — those magic moments are the point; NEVER add a decade or era phrase (no \"Seventies era\", \"1970s\", or \"... era\") because the photo's own year is shown separately and an era guess can contradict it; describe WHO or WHAT the photo shows instead; NO year or date digits (added separately); do NOT invent — use only the filename plus well-known facts, and when unclear fall back to a clean generic like the artist/band name or \"On stage\" / \"In the studio\"; these are PHOTOS OF THE ARTIST/BAND, NEVER album artwork — never output \"album cover\", \"cover\" or \"artwork\"; if the filename contains the album title, treat it as the era/context or a publicity/press shot (e.g. a 1975 publicity shot), NOT the cover; prefer descriptive filename words (publicity, press, portrait, live, backstage, festival); no trailing punctuation; Title Case. Output STRICT JSON: an array of strings, exactly one per image, same order." + esRule;
   const user = "Song: \"" + ctx.title + "\" - " + ctx.artist + (ctx.album ? " (album: " + ctx.album + ")" : "") + "\n\nImages:\n" + list + "\n\nReturn a JSON array of " + arr.length + " short captions, in order.";
   const ctrl = new AbortController();
   const timer = setTimeout(function () { ctrl.abort(); }, 12000);
@@ -508,13 +511,15 @@ module.exports = async function (context, req) {
   const artist = ((req.query && req.query.artist) || "").trim();
   const title = ((req.query && req.query.title) || "").trim();
   const album = ((req.query && req.query.album) || "").trim();
+  const lang = (req.query && req.query.lang === "es") ? "es" : "en";
   const eraYear = (+(String((req.query && req.query.year) || "").match(/\b(?:18|19|20)\d\d\b/) || [])[0]) || 0;
   const paPrimary = primaryArtist(artist).trim() || artist;
   if (!artist && !title) { context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Provide ?artist= and/or ?title=" } }; return; }
 
   // Cache keyed by ALBUM so each record is its own combination (same combo only for the same album/artist).
   const key = (artist + "|" + (album || title)).toLowerCase().replace(/\s+/g, "_");
-  if (cache.has(key)) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: cache.get(key) }; return; }
+  const memKey = lang === "es" ? key + "|es" : key; // photos are identical across languages; only captions differ
+  if (cache.has(memKey)) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: cache.get(memKey) }; return; }
 
   // Resolve the artist's music article. Prefer the FULL name so a band whose name contains "&" or ","
   // (e.g. "Iron & Wine", "Earth, Wind & Fire") is NOT reduced to a fragment like "Iron" (the element).
@@ -624,11 +629,11 @@ module.exports = async function (context, req) {
   // ---- Rewrite each photo's caption: a short who/what title that links it to the song, then the year ----
   const photoItems = items.filter(function (x) { return x.type === "photo"; });
   if (photoItems.length) {
-    const capKey = "sdd:cap:5:" + key; // v3 2026-07-07: magic-moment/era-insight caption prompt (bump if the prompt changes)
+    const capKey = "sdd:cap:5:" + (lang === "es" ? "es:" : "") + key; // v3 2026-07-07: magic-moment/era-insight caption prompt (bump if the prompt changes)
     let capMap = (await capGet(capKey)) || {};
     const missing = photoItems.filter(function (p) { return !capMap[photoId(p.url)]; });
     if (missing.length && apiKey) {
-      const gen = await smartCaptions(apiKey, { title: title, artist: pa, album: album }, missing.map(function (p) { return p.title; }));
+      const gen = await smartCaptions(apiKey, { title: title, artist: pa, album: album }, missing.map(function (p) { return p.title; }), lang);
       if (gen && gen.length === missing.length) {
         missing.forEach(function (p, i) { if (gen[i]) capMap[photoId(p.url)] = gen[i].slice(0, 48); });
         await capSet(capKey, capMap);
@@ -644,6 +649,6 @@ module.exports = async function (context, req) {
   const nPhoto = items.filter(function (x) { return x.type === "photo"; }).length;
   // Cache only a COMPLETE result: >=2 photos, or nothing more to get (no music article) — so a cold
   // Wikipedia timeout that returned just the infobox is NOT cached and simply retries next time.
-  if (items.length && (nPhoto >= 2 || !mw)) { if (cache.size > CACHE_MAX) cache.clear(); cache.set(key, payload); }
+  if (items.length && (nPhoto >= 2 || !mw)) { if (cache.size > CACHE_MAX) cache.clear(); cache.set(memKey, payload); }
   context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: payload };
 };

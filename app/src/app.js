@@ -137,12 +137,41 @@
   }
 
   // ---------- deep-dive cache ----------
+  // ---------- story-section language (EN default; Spanish is written natively, not machine-translated) ----------
+  var STORY_LANG = "en";
+  try { if (window.localStorage && localStorage.getItem("gk_story_lang") === "es") STORY_LANG = "es"; } catch (e) {}
+  var STORY_STRINGS = {
+    en: { story:"The story", deeper:"geeek deeper", showLess:"show less", digging:"Digging deeper\u2026",
+      deeperSoon:"More on this one is coming soon.", deeperErr:"Couldn\u2019t load the deeper story right now.",
+      similar:"Similar songs", queueNote:"Tap to add to your Spotify queue \u2014 plays next.",
+      related:"Related songs", coverLead:"This version is a cover", coverOrig:" \u2014 here\u2019s the original", coverAnd:" and other renditions:", coverColon:":", coverDot:".",
+      theOriginal:"The original", otherCovers:"Other covers",
+      official:"Official video", findVideo:"Find the official video on ", watchVideo:"Watch the official video on ",
+      adding:"Adding to your queue\u2026", added:"Added to your Spotify queue \u2014 plays next \u2713", pressPlay:"Press play on Spotify first, then tap to queue.", opening:"Opening in Spotify\u2026",
+      noStory:"No deep dive for this one yet \u2014 try another song.", loadErr:"Couldn\u2019t load the deep dive right now. Try again in a moment." },
+    es: { story:"La historia", deeper:"geeek a fondo", showLess:"ver menos", digging:"Profundizando\u2026",
+      deeperSoon:"Pronto va a haber m\u00e1s sobre esta canci\u00f3n.", deeperErr:"No se pudo cargar la versi\u00f3n a fondo en este momento.",
+      similar:"Canciones similares", queueNote:"Toc\u00e1 para agregar a tu cola de Spotify \u2014 suena a continuaci\u00f3n.",
+      related:"Canciones relacionadas", coverLead:"Esta versi\u00f3n es un cover", coverOrig:" \u2014 este es el original", coverAnd:" y otras versiones:", coverColon:":", coverDot:".",
+      theOriginal:"El original", otherCovers:"Otras versiones",
+      official:"Video oficial", findVideo:"Busc\u00e1 el video oficial en ", watchVideo:"Mir\u00e1 el video oficial en ",
+      adding:"Agregando a tu cola\u2026", added:"Agregada a tu cola de Spotify \u2014 suena a continuaci\u00f3n \u2713", pressPlay:"Dale play en Spotify primero y despu\u00e9s toc\u00e1 para encolar.", opening:"Abriendo en Spotify\u2026",
+      noStory:"Todav\u00eda no hay deep dive para esta \u2014 prob\u00e1 con otra canci\u00f3n.", loadErr:"No se pudo cargar el deep dive ahora. Prob\u00e1 de nuevo en un momento." }
+  };
+  function L(k) { var d = STORY_STRINGS[STORY_LANG] || STORY_STRINGS.en; return (d[k] != null ? d[k] : (STORY_STRINGS.en[k] || "")); }
+  function setStoryLang(lang) {
+    if (lang !== "es" && lang !== "en") return;
+    if (lang === STORY_LANG) return;
+    STORY_LANG = lang;
+    try { if (window.localStorage) localStorage.setItem("gk_story_lang", lang); } catch (e) {}
+    if (curTab === "cards") { if (cur && (cur.title || cur.id)) loadDeepDive(cur); else welcome(); }
+  }
   var CACHE_PREFIX = "sdd:cards:v" + ((CFG && CFG.VERSION) || "0") + ":";
   // Canonical key mirrors the server: same song -> same story, regardless of edition/feature noise.
   function ckNorm(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
   function ckTitle(t) { return String(t || "").replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ").replace(/\s[-–—]\s.*$/, " "); }
   function ckArtist(a) { return String(a || "").split(/,|&|;|\/|feat\.?|featuring|\bwith\b|\bx\b|vs\.?/i)[0]; }
-  function cacheKey(t) { return CACHE_PREFIX + (ckNorm(ckTitle(t.title)) + "|" + ckNorm(ckArtist(t.artist))).replace(/\s+/g, "_"); }
+  function cacheKey(t) { return CACHE_PREFIX + STORY_LANG + ":" + (ckNorm(ckTitle(t.title)) + "|" + ckNorm(ckArtist(t.artist))).replace(/\s+/g, "_"); }
   function cacheGet(t) { try { var r = localStorage.getItem(cacheKey(t)); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
   function cacheSet(t, p) { try { localStorage.setItem(cacheKey(t), JSON.stringify(p)); } catch (e) {} }
   function isAi(p) { return !!(p && p._meta && typeof p._meta.source === "string" && p._meta.source.indexOf("ai") === 0); }
@@ -171,7 +200,8 @@
   }
   function skeletonCards() {
     panel.innerHTML = '<article class="st-read">'
-      + '<div class="st-kicker">The story</div>'
+      + '<div class="st-langbar" role="group" aria-label="Story language"><button type="button" class="st-lang' + (STORY_LANG === "en" ? " on" : "") + '" data-lang="en">EN</button><span class="st-lang-sep" aria-hidden="true">·</span><button type="button" class="st-lang' + (STORY_LANG === "es" ? " on" : "") + '" data-lang="es">ES</button></div>'
+      + '<div class="st-kicker">' + esc(L("story")) + '</div>'
       + '<div class="st-headline skeleton" style="height:26px;max-width:80%;border-radius:8px">&nbsp;</div>'
       + '<div class="st-body"><p class="st-p skeleton">Reading the room and gathering the story…</p>'
       + '<p class="st-p skeleton">One moment.</p></div></article>';
@@ -260,7 +290,7 @@
     var key = trackKey(t);
     curStoryKey = key;
     try {
-      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || (cur && cur.album) || "", year: t.albumYear || (cur && cur.albumYear) || "", v: "25" }).toString(), { cache: "no-store" })
+      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || (cur && cur.album) || "", year: t.albumYear || (cur && cur.albumYear) || "", v: "25", lang: STORY_LANG }).toString(), { cache: "no-store" })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
           if (key !== curStoryKey || curTab !== "cards") return;
@@ -332,7 +362,7 @@
   }
   function renderStory(payload) {
     var story = deriveStory(payload);
-    if (!story) { notePanel("No deep dive for this one yet — try another song."); return; }
+    if (!story) { notePanel(L("noStory")); return; }
     // Drop the dek when it just repeats (a prefix/substring of) the opening paragraph \u2014 keep the fuller text.
     var dek = story.dek || "";
     var body0 = (story.body && story.body[0] && story.body[0].text) || "";
@@ -347,9 +377,11 @@
       + '<h2 class="st-headline">' + esc(story.headline || "") + '</h2>'
       + (dek ? '<p class="st-dek">' + esc(dek) + '</p>' : '')
       + '<div class="st-body">' + storyBlocksHtml(story.body, [story.headline, dek]) + '</div>'
-      + '<div class="st-deeper-wrap"><button class="st-deeper-btn" id="st-deeper-btn" type="button"><span class="lbl">geeek deeper</span><span class="chev" aria-hidden="true">▾</span></button></div>'
+      + '<div class="st-deeper-wrap"><button class="st-deeper-btn" id="st-deeper-btn" type="button"><span class="lbl">' + esc(L("deeper")) + '</span><span class="chev" aria-hidden="true">▾</span></button></div>'
       + '<div class="st-deeper hidden" id="st-deeper"></div>'
       + '</article>';
+    var _lb = panel.querySelector(".st-langbar");
+    if (_lb) _lb.addEventListener("click", function (ev) { var b = ev.target && ev.target.closest && ev.target.closest(".st-lang"); if (b) setStoryLang(b.getAttribute("data-lang")); });
     enrichStoryRetry(payload, 5);
   }
   function renderCards(payload) { renderStory(payload); }
@@ -372,7 +404,7 @@
     if (!wrap) return;
     if (deeperState.loaded && wrap.getAttribute("data-key") === curStoryKey) {
       var hidden = wrap.classList.toggle("hidden");
-      if (btn) { btn.classList.toggle("open", !hidden); var l = btn.querySelector(".lbl"); if (l) l.textContent = hidden ? "geeek deeper" : "show less"; }
+      if (btn) { btn.classList.toggle("open", !hidden); var l = btn.querySelector(".lbl"); if (l) l.textContent = hidden ? L("deeper") : L("showLess"); }
       return;
     }
     loadDeeper();
@@ -385,32 +417,32 @@
     var myKey = trackKey(t);
     wrap.classList.remove("hidden");
     wrap.setAttribute("data-key", myKey);
-    wrap.innerHTML = '<div class="st-deeper-note">Digging deeper…</div>';
+    wrap.innerHTML = '<div class="st-deeper-note">' + esc(L("digging")) + '</div>';
     if (btn) btn.classList.add("loading");
     fetch(CFG.API_BASE + "/deeper", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: t.title || "", artist: t.artist || "", album: t.album || "", seed: curStoryText || "" })
+      body: JSON.stringify({ title: t.title || "", artist: t.artist || "", album: t.album || "", seed: curStoryText || "", lang: STORY_LANG })
     })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (curStoryKey !== myKey) return;
         var deeper = d && d.deeper;
         if (!deeper || !deeper.body || !deeper.body.length) {
-          wrap.innerHTML = '<div class="st-deeper-note">More on this one is coming soon.</div>';
+          wrap.innerHTML = '<div class="st-deeper-note">' + esc(L("deeperSoon")) + '</div>';
           if (btn) btn.classList.remove("loading");
           return;
         }
         wrap.innerHTML = deeperBlocksHtml(deeper.body);
         deeperState.loaded = true; deeperState.key = myKey;
-        if (btn) { btn.classList.remove("loading"); btn.classList.add("open"); var l = btn.querySelector(".lbl"); if (l) l.textContent = "show less"; }
+        if (btn) { btn.classList.remove("loading"); btn.classList.add("open"); var l = btn.querySelector(".lbl"); if (l) l.textContent = L("showLess"); }
         enrichDeeperMedia(t, wrap);
         renderCovers(wrap, deeper.covers, deeper.original);   // "Covers", or "The original" + "Also covered by" when this track is itself a cover
         renderSimilarSongs(wrap, deeper.recos);   // "Similar songs" — 2 real Spotify links
         renderOfficialVideo(wrap, deeper.video);  // official YouTube/Vimeo video card at the very end
       })
       .catch(function () {
-        wrap.innerHTML = '<div class="st-deeper-note">Couldn’t load the deeper story right now.</div>';
+        wrap.innerHTML = '<div class="st-deeper-note">' + esc(L("deeperErr")) + '</div>';
         if (btn) btn.classList.remove("loading");
       });
   }
@@ -454,12 +486,12 @@
       ev.preventDefault();
       if (a.classList.contains("reco-queued") || a.classList.contains("reco-busy")) return;
       if (!(S && S.queueUri && track && track.uri)) { window.open(a.href, "_blank", "noopener"); return; }
-      a.classList.add("reco-busy"); setStatus("Adding to your queue…");
+      a.classList.add("reco-busy"); setStatus(L("adding"));
       S.queueUri(track.uri).then(function (r) {
         a.classList.remove("reco-busy");
-        if (r && r.ok) { a.classList.add("reco-queued"); setStatus("Added to your Spotify queue — plays next ✓"); }
-        else if (r && r.reason === "no-device") { setStatus("Press play on Spotify first, then tap to queue."); }
-        else { window.open(a.href, "_blank", "noopener"); setStatus("Opening in Spotify…"); }
+        if (r && r.ok) { a.classList.add("reco-queued"); setStatus(L("added")); }
+        else if (r && r.reason === "no-device") { setStatus(L("pressPlay")); }
+        else { window.open(a.href, "_blank", "noopener"); setStatus(L("opening")); }
       });
     });
   }
@@ -469,8 +501,8 @@
     var sec = document.createElement("div"); sec.className = "st-recos"; wrap.appendChild(sec); // append now so the story photo can anchor above it
     resolveCandidates(recos, 3).then(function (matched) {
       if (!matched.length) { if (sec.parentNode) sec.parentNode.removeChild(sec); return; }
-      var h = document.createElement("h3"); h.className = "st-dh st-recos-h"; h.textContent = "Similar songs"; sec.appendChild(h);
-      var note = document.createElement("p"); note.className = "st-recos-note"; note.textContent = "Tap to add to your Spotify queue — plays next."; sec.appendChild(note);
+      var h = document.createElement("h3"); h.className = "st-dh st-recos-h"; h.textContent = L("similar"); sec.appendChild(h);
+      var note = document.createElement("p"); note.className = "st-recos-note"; note.textContent = L("queueNote"); sec.appendChild(note);
       matched.forEach(function (m) { sec.appendChild(buildRecoButton(m.cand.title, m.cand.artist, m.cand.why, m.track)); });
     });
   }
@@ -483,7 +515,7 @@
     var hasCovers = !!(covers && covers.length);
     if (!wrap || (!isCover && !hasCovers)) return;
     var sec = document.createElement("div"); sec.className = "st-recos st-covers"; wrap.appendChild(sec); // placeholder appended synchronously to keep section order
-    function heading() { var h = document.createElement("h3"); h.className = "st-dh st-covers-h"; h.textContent = "Related songs"; sec.appendChild(h); }
+    function heading() { var h = document.createElement("h3"); h.className = "st-dh st-covers-h"; h.textContent = L("related"); sec.appendChild(h); }
     function subLabel(t) { var d = document.createElement("div"); d.className = "st-sublabel"; d.textContent = t; sec.appendChild(d); }
     function item(m) { if (m.cand.story) { var pp = document.createElement("p"); pp.className = "st-p"; pp.textContent = m.cand.story; sec.appendChild(pp); } sec.appendChild(buildRecoButton(m.cand.title, m.cand.artist, null, m.track)); }
     if (isCover) {
@@ -492,10 +524,10 @@
         if (!oM.length && !cM.length) { if (sec.parentNode) sec.parentNode.removeChild(sec); return; }
         heading();
         var note = document.createElement("p"); note.className = "st-p";
-        note.textContent = "This version is a cover" + (oM.length ? " \u2014 here's the original" + (cM.length ? " and other renditions:" : ":") : ".");
+        note.textContent = L("coverLead") + (oM.length ? L("coverOrig") + (cM.length ? L("coverAnd") : L("coverColon")) : L("coverDot"));
         sec.appendChild(note);
-        if (oM.length) { subLabel("The original"); item(oM[0]); }
-        if (cM.length) { subLabel("Other covers"); cM.forEach(item); }
+        if (oM.length) { subLabel(L("theOriginal")); item(oM[0]); }
+        if (cM.length) { subLabel(L("otherCovers")); cM.forEach(item); }
       });
     } else {
       resolveCandidates(covers, 2).then(function (matched) {
@@ -512,20 +544,20 @@
     var isVimeo = video.platform === "vimeo";
     var sec = document.createElement("div");
     sec.className = "st-video";
-    var h = document.createElement("h3"); h.className = "st-dh st-video-h"; h.textContent = "Official video"; sec.appendChild(h);
+    var h = document.createElement("h3"); h.className = "st-dh st-video-h"; h.textContent = L("official"); sec.appendChild(h);
     var a = document.createElement("a");
     a.className = "video-card"; a.target = "_blank"; a.rel = "noopener"; a.href = video.url;
     if (video.thumb) a.style.backgroundImage = "url('" + video.thumb + "')";
     var ytLogo = '<svg width="64" height="45" viewBox="0 0 68 48" aria-hidden="true"><path fill="#ff0000" d="M66.5 7.7c-.8-2.9-3-5.1-5.9-5.9C55.3.5 34 .5 34 .5S12.7.5 7.4 1.8C4.5 2.6 2.3 4.8 1.5 7.7.2 13 .2 24 .2 24s0 11 1.3 16.3c.8 2.9 3 5.1 5.9 5.9C12.7 47.5 34 47.5 34 47.5s21.3 0 26.6-1.3c2.9-.8 5.1-3 5.9-5.9C67.8 35 67.8 24 67.8 24s0-11-1.3-16.3z"/><path fill="#fff" d="M27 34l18-10-18-10z"/></svg>';
     var vimLogo = '<svg width="54" height="54" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1ab7ea"/><path fill="#fff" d="M18.5 8.6c-.06 1.3-.97 3.06-2.73 5.3-1.82 2.33-3.36 3.5-4.62 3.5-.78 0-1.44-.72-1.98-2.16l-1.08-3.96c-.4-1.44-.83-2.16-1.29-2.16-.1 0-.45.21-1.05.63l-.63-.81c.66-.58 1.31-1.16 1.95-1.74.88-.76 1.54-1.16 1.98-1.2 1.04-.1 1.68.61 1.92 2.13.26 1.64.44 2.66.54 3.06.3 1.36.63 2.04.99 2.04.28 0 .7-.44 1.26-1.32.56-.88.86-1.55.9-2.01.08-.76-.22-1.14-.9-1.14-.32 0-.65.07-.99.22.66-2.16 1.92-3.21 3.78-3.15 1.38.04 2.03.94 1.95 2.69z"/></svg>';
     a.innerHTML = '<span class="video-badge">' + (isVimeo ? vimLogo : ytLogo) + '</span>'
-      + '<span class="video-label">' + (video.search ? "Find the official video on " : "Watch the official video on ") + (isVimeo ? "Vimeo" : "YouTube") + ' \u2197</span>';
+      + '<span class="video-label">' + (video.search ? L("findVideo") : L("watchVideo")) + (isVimeo ? "Vimeo" : "YouTube") + ' \u2197</span>';
     sec.appendChild(a);
     wrap.appendChild(sec);
   }
   // Deeper photos — deliberately DIFFERENT from the first section (shownStoryPhotos are excluded).
   function enrichDeeperMedia(t, wrap) {
-    fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || (cur && cur.album) || "", year: t.albumYear || (cur && cur.albumYear) || "", v: "25" }).toString(), { cache: "no-store" })
+    fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || (cur && cur.album) || "", year: t.albumYear || (cur && cur.albumYear) || "", v: "25", lang: STORY_LANG }).toString(), { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (curStoryKey !== trackKey(t)) return;
@@ -586,7 +618,7 @@
     var cached = cacheGet(track);
     if (cached && cached.cards && cached.cards.length) { if (curTab === "cards") renderCards(cached); return; }
     if (curTab === "cards") skeletonCards();
-    var url = CFG.API_BASE + "/deepdive?" + new URLSearchParams({ id: track.id || "", title: track.title || "", artist: track.artist || "" }).toString();
+    var url = CFG.API_BASE + "/deepdive?" + new URLSearchParams({ id: track.id || "", title: track.title || "", artist: track.artist || "", lang: STORY_LANG }).toString();
     var attempt = async function () { var res = await fetch(url); if (!res.ok) throw new Error("api " + res.status); return await res.json(); };
     try {
       var data;
@@ -597,7 +629,7 @@
       if (isAi(data)) cacheSet(track, data);
     } catch (e) {
       if (mine !== loadSeq) return;
-      if (curTab === "cards") notePanel("Couldn’t load the deep dive right now. Try again in a moment.");
+      if (curTab === "cards") notePanel(L("loadErr"));
     }
   }
 

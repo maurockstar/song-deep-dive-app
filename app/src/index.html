@@ -170,6 +170,11 @@
   .st-meta{font-family:var(--label);font-size:11px;letter-spacing:.04em;color:var(--dim);margin:0 0 18px;padding-bottom:16px;border-bottom:1px solid var(--border)}
   .st-p{font-size:15.5px;line-height:1.62;color:var(--ink);margin:0 0 15px}
   .st-quote{margin:20px 0;padding:2px 0 2px 16px;border-left:3px solid var(--sun-500);font-family:var(--round);font-weight:600;font-size:19px;line-height:1.3;color:var(--ink-hi)}
+  .st-langbar{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:2px 0 10px}
+  .st-lang{background:none;border:none;cursor:pointer;font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.09em;color:var(--dim);padding:2px 5px;border-radius:6px;transition:color .15s,background .15s}
+  @media (hover:hover){.st-lang:hover{color:var(--muted)}}
+  .st-lang.on{color:var(--on-accent);background:linear-gradient(180deg,var(--sun-300),var(--sun-500))}
+  .st-lang-sep{color:var(--dim);opacity:.5;font-size:11px;user-select:none}
   .st-media{margin:22px 0}
   .st-lead:empty{display:none}
   .st-lead .st-media{margin:0 0 18px}
@@ -533,13 +538,13 @@
   </div>
 </div>
 
-<script src="./config.js?v=39"></script>
-<script src="./gate.js?v=39"></script>
-<script src="./log.js?v=39"></script>
-<script src="./i18n.js?v=39"></script>
-<script src="./spotify.js?v=39"></script>
+<script src="./config.js?v=40"></script>
+<script src="./gate.js?v=40"></script>
+<script src="./log.js?v=40"></script>
+<script src="./i18n.js?v=40"></script>
+<script src="./spotify.js?v=40"></script>
 <script src="https://sdk.scdn.co/spotify-player.js" async></script>
-<script src="./applemusic.js?v=39"></script>
-<script src="./app.js?v=39"></script>
+<script src="./applemusic.js?v=40"></script>
+<script src="./app.js?v=40"></script>
 </body>
 </html>
