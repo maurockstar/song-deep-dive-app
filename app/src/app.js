@@ -405,7 +405,7 @@
         deeperState.loaded = true; deeperState.key = myKey;
         if (btn) { btn.classList.remove("loading"); btn.classList.add("open"); var l = btn.querySelector(".lbl"); if (l) l.textContent = "show less"; }
         enrichDeeperMedia(t, wrap);
-        renderCovers(wrap, deeper.covers);        // up to 2 famous covers — each a story + a Spotify button
+        renderCovers(wrap, deeper.covers, deeper.original);   // "Covers", or "The original" + "Also covered by" when this track is itself a cover
         renderSimilarSongs(wrap, deeper.recos);   // "Similar songs" — 2 real Spotify links
         renderOfficialVideo(wrap, deeper.video);  // official YouTube/Vimeo video card at the very end
       })
@@ -476,17 +476,27 @@
   }
   // "Covers" — up to 2 famous covers of THIS song: a short story then a Spotify button, per the user's flow.
   // "Covers" — same rule: show a cover only when it resolves to a real, playable Spotify track.
-  function renderCovers(wrap, covers) {
-    if (!wrap || !covers || !covers.length) return;
-    var sec = document.createElement("div"); sec.className = "st-recos st-covers"; wrap.appendChild(sec);
-    resolveCandidates(covers, 2).then(function (matched) {
+  function renderCoverSection(wrap, list, limit, heading) {
+    if (!wrap || !list || !list.length) return;
+    var sec = document.createElement("div"); sec.className = "st-recos st-covers"; wrap.appendChild(sec); // placeholder appended synchronously to keep section order
+    resolveCandidates(list, limit).then(function (matched) {
       if (!matched.length) { if (sec.parentNode) sec.parentNode.removeChild(sec); return; }
-      var h = document.createElement("h3"); h.className = "st-dh st-covers-h"; h.textContent = "Covers"; sec.appendChild(h);
+      var h = document.createElement("h3"); h.className = "st-dh st-covers-h"; h.textContent = heading; sec.appendChild(h);
       matched.forEach(function (m) {
         if (m.cand.story) { var pp = document.createElement("p"); pp.className = "st-p"; pp.textContent = m.cand.story; sec.appendChild(pp); }
         sec.appendChild(buildRecoButton(m.cand.title, m.cand.artist, null, m.track));
       });
     });
+  }
+  // If the now-playing track is itself a cover, lead with "The original" (the source version) and list the
+  // rest as "Also covered by". Otherwise the usual "Covers" of THIS original song.
+  function renderCovers(wrap, covers, original) {
+    if (original && original.artist && original.title) {
+      renderCoverSection(wrap, [original], 1, "The original");
+      renderCoverSection(wrap, covers, 2, "Also covered by");
+    } else {
+      renderCoverSection(wrap, covers, 2, "Covers");
+    }
   }
   // Official video card at the very end of "geeek deeper": a clickable thumbnail with the platform logo
   // centered, opening a new tab (iOS opens the YouTube/Vimeo app via universal link, else the web client).

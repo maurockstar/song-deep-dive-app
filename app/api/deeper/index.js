@@ -22,7 +22,7 @@ const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "2.1"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "2.2"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -289,6 +289,7 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     "HEADINGS: Use ONLY these section headings, verbatim: The song, The album, The era, Producer & engineer. Do NOT invent other headings (covers are handled separately, below). Never address data, sources, lookups, uncertainty or discrepancies — if unsure, silently omit.\n\n" +
     "SIMILAR SONGS (recos): Also pick FIVE candidate songs for discovery (the app shows only ones a listener can actually find on Spotify, best two). Rules: (1) EVERY pick is by a DIFFERENT artist than this song's artist AND different from each other — no repeats; (2) NOT from the same album, and NEVER a cover, remix, live version, re-recording or alternate version of THIS same song — recommend genuinely DIFFERENT songs; (3) gravitate to OTHER artists to help the listener discover new acts; (4) each must genuinely match this song's vibe — groove, era, tempo/beat, rhythm, energy and overall feel; (5) each needs a short complete one-line 'why' (<= 16 words) naming the shared musical quality. If a CANDIDATES list is given (real co-listening data), STRONGLY prefer picks from it. CRITICAL: only recommend songs you are highly confident actually exist and are correctly credited to that EXACT artist — never invent a song or mis-attribute a title to the wrong artist. When unsure, choose a more famous, safely-attributed song by a fitting artist that a listener can definitely find on Spotify.\n\n" +
     "COVERS: Separately, list up to FOUR of the MOST FAMOUS real cover versions of THIS song, by OTHER artists (never the original artist). A cover means the SAME COMPOSITION re-recorded by a different act \u2014 NOT a different song that merely shares the title; if you are not certain it is literally the same song (same writers, melody and lyrics), OMIT it. For each: the cover artist, the song title as they released it, and a 1-2 sentence story about that specific cover (what makes it notable — a hit, a reinvention, a famous live performance). Only real, well-known covers you are confident exist and are correctly attributed; if none are truly famous, return an empty covers array. Never invent a cover.\n\n" +
+    "ORIGINAL vs COVER (critical): the performing artist is named in Facts. If that performing artist is NOT the original recording artist (this playing version is itself a cover), set the original field to the ORIGINAL version as an object {artist, title, story} where story is 1-2 sentences on the original / first definitive recording. If the performing artist IS the original, set original to null. When original is set: the COVERS list must EXCLUDE both the performing artist and the original artist (list only OTHER covers), and write the whole piece as an INTERPRETATION that credits the original songwriter/artist, focuses on what THIS version changes, and NEVER implies the performing artist wrote the song.\n\n" +
     "Output STRICT JSON only — no prose, no markdown fences.";
   const user =
     `Facts:\n${factsBlock(f)}\n\n` +
@@ -317,7 +318,9 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     `{"artist":"second cover artist","title":"the song title as they released it","story":"1-2 sentences on this cover"},` +
     `{"artist":"third cover artist","title":"the song title as they released it","story":"1-2 sentences on this cover"},` +
     `{"artist":"fourth cover artist","title":"the song title as they released it","story":"1-2 sentences on this cover"}` +
-    `]}}`;
+    `],` +
+    `"original":{"artist":"the ORIGINAL recording artist, or null if THIS performing version IS the original","title":"the original song title","story":"1-2 sentences on the original / first definitive recording"}` +
+    `}}`;
   const body = { model: ANTHROPIC_MODEL, max_tokens: 2000, system, messages: [{ role: "user", content: user }] };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 30000);
@@ -375,8 +378,9 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
 
     const recos = cleanRecos(parsed.deeper.recos, f.artist);
     const covers = cleanCovers(parsed.deeper.covers, f.artist);
+    const original = cleanOriginal(parsed.deeper.original, f.artist);
     if (!pruned.length && !recos.length && !covers.length) return null;
-    return { body: pruned, recos, covers };
+    return { body: pruned, recos, covers, original };
   } catch (e) { context.log("anthropic error", e.message); return null; } finally { clearTimeout(timer); }
 }
 
@@ -435,6 +439,13 @@ async function verifyCovers(covers, workId) {
     return isGenuineCover(c.artist, c.title, workId).then(function (ok) { return ok ? c : null; }).catch(function () { return null; });
   }));
   return checked.filter(Boolean);
+}
+function cleanOriginal(o, songArtist) {
+  if (!o || typeof o !== "object" || !o.artist || !o.title) return null;
+  const pa = norm(primaryArtist(songArtist));
+  const na = norm(primaryArtist(o.artist));
+  if (!na || (pa && na === pa)) return null;   // the ORIGINAL must be a DIFFERENT artist than the performer
+  return { artist: String(o.artist).trim(), title: String(o.title).trim(), story: clip(o.story || "", 260) };
 }
 function cleanCovers(arr, songArtist) {
   const pa = norm(primaryArtist(songArtist));
@@ -514,9 +525,19 @@ module.exports = async function (context, req) {
   }
   const aiUsed = !!(ai && ai.body && ai.body.length);
   const deeper = aiUsed ? ai : templateDeeper(facts, similarPool);
+  // When THIS playing version is a cover, verify the AI-named "original" is a genuine recording of the same work.
+  if (deeper && deeper.original && deeper.original.artist) {
+    const okOrig = await isGenuineCover(deeper.original.artist, deeper.original.title, facts.workId);
+    if (!okOrig) deeper.original = null;
+  }
   if (deeper && Array.isArray(deeper.covers) && deeper.covers.length) {
     deeper.covers = await verifyCovers(deeper.covers, facts.workId); // keep only genuine same-work covers
+    if (deeper.original && deeper.original.artist) {                  // never repeat the original inside the covers list
+      const _oa = norm(primaryArtist(deeper.original.artist));
+      deeper.covers = deeper.covers.filter(function (c) { return norm(primaryArtist(c.artist)) !== _oa; });
+    }
   }
+  if (deeper && deeper.original === undefined) deeper.original = null;
   deeper.video = video || null; // official YouTube/Vimeo video for the song (or null)
 
   let payload = {
