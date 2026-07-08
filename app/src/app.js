@@ -260,7 +260,7 @@
     var key = trackKey(t);
     curStoryKey = key;
     try {
-      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || "", year: t.albumYear || "", v: "25" }).toString(), { cache: "no-store" })
+      fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || (cur && cur.album) || "", year: t.albumYear || (cur && cur.albumYear) || "", v: "25" }).toString(), { cache: "no-store" })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
           if (key !== curStoryKey || curTab !== "cards") return;
@@ -508,7 +508,7 @@
   }
   // Deeper photos — deliberately DIFFERENT from the first section (shownStoryPhotos are excluded).
   function enrichDeeperMedia(t, wrap) {
-    fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || "", year: t.albumYear || "", v: "25" }).toString(), { cache: "no-store" })
+    fetch(CFG.API_BASE + "/media?" + new URLSearchParams({ artist: t.artist || "", title: t.title || "", album: t.album || (cur && cur.album) || "", year: t.albumYear || (cur && cur.albumYear) || "", v: "25" }).toString(), { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (curStoryKey !== trackKey(t)) return;
