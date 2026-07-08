@@ -580,9 +580,9 @@ async function localizeDeeperSpanish(apiKey, enDeeper, seed, context) {
     original: original ? { artist: original.artist, title: original.title, story: original.story || "" } : null
   };
   const system =
-    "You are a native Latin American Spanish music writer. You receive an English 'go deeper' long-read (as JSON) plus its recommended songs, covers and original. " +
-    "Re-express it in natural, idiomatic, NEUTRAL Latin American Spanish (NOT from Spain, NOT machine-translated) with exactly the same voice, facts, meaning, structure and order — as if it had been written in Spanish from the start. Translate the section HEADINGS to Spanish (e.g. 'The song'->'La canción', 'The album'->'El álbum', 'The era'->'La época', 'Producer & engineer'->'Productor e ingeniero'). " +
-    "Keep song titles, album names, band/artist and people's names in their ORIGINAL language. Do NOT add, remove, reorder or change any recommended song, cover or original — only write their Spanish 'why'/'story' text, keeping the SAME array length and order as the input. Do not reproduce lyrics. Output STRICT JSON only, no markdown fences.";
+    "You are a Latin American music writer telling a close friend the deeper story of a song. You receive an English 'go deeper' long-read (as JSON) plus its recommended songs, covers and original — treat it as your FACTS SOURCE, not as text to translate. " +
+    "VOICE: re-tell each block natively in warm Latin American Spanish — tú (never vosotros), short sentences with Spanish rhythm, simple everyday words, alive. Do NOT mirror the English sentence structure or word order; within each block, re-compose the prose from scratch in Spanish keeping its meaning and every fact identical (names, dates, credits, numbers, band size, who wrote/played/produced). NEVER stiff textbook connectors (no obstante, asimismo), NEVER anglicisms or calques, NEVER machine-translation flavor — the reader must never suspect an English original exists. Translate the section HEADINGS to Spanish (e.g. 'The song'->'La canción', 'The album'->'El álbum', 'The era'->'La época', 'Producer & engineer'->'Productor e ingeniero'). " +
+    "Keep song titles, album names, band/artist and people's names in their ORIGINAL language. Do NOT add, remove, reorder or change any recommended song, cover or original — only write their Spanish 'why'/'story' text, keeping the SAME array length and order as the input (blocks map 1:1; only the prose inside each is freely re-written). Do not reproduce lyrics. Output STRICT JSON only, no markdown fences.";
   const user =
     "English deeper to render fully in Spanish:\n" + JSON.stringify(inBlock) + "\n\n" +
     "Return STRICT JSON exactly in this shape: {\"body\":[{\"type\":\"h|p|quote\",\"text\":\"...\"}],\"recos\":[{\"why\":\"...\"}],\"covers\":[{\"story\":\"...\"}],\"original\":{\"story\":\"...\"}}. " +
@@ -619,7 +619,7 @@ module.exports = async function (context, req) {
 
   const key = cacheKey(q);
   const memKey = lang === "es" ? key + "|es" : key;
-  const skey = "sdd:deep:" + VERSION + (lang === "es" ? ":es:" : ":") + key;
+  const skey = "sdd:deep:" + VERSION + (lang === "es" ? ":es2:" : ":") + key; // es2 = 2026-07-07 native-Spanish voice; old :es: orphaned, EN canonical untouched
   const ok = function (payload) { context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" }, body: payload }; };
 
   if (cache.has(memKey)) { ok(cache.get(memKey)); return; }

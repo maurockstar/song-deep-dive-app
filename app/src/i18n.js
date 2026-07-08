@@ -29,27 +29,30 @@
       "version": "Geeek · v"
     },
     es: {
+      // Voz Geeek en español (CEdO 2026-07-07): cálida, latinoamericana, de amigo — nunca traducción literal.
+      // Base es-419: tú, frases cortas, diminutivos con cariño, cero calcos ("bucear" jamás). Guía completa:
+      // Geeek\12_Editorial_CEdO\Geeek - Spanish Voice & LatAm Market Study (CEdO).md
       "brand.name": "g<span class=\"e3\">eee</span>k",
       "btn.connectSpotify": "Conectar Spotify",
       "btn.connected": "Conectado a Spotify ✓",
-      "btn.dive": "Bucear",
-      "btn.logout": "Cerrar Sesión",
-      "search.placeholder": "O busca una canción para sumergirte…",
-      "empty.welcome.h1": "Obsesiónate con la música que amas.",
-      "empty.welcome.p": "Conecta Spotify (o busca una canción) y descubriremos la historia detrás, quién la hizo y cómo se conecta con todo lo demás.",
-      "empty.noResults.h1": "Sin buceo profundo aún",
-      "empty.noResults.p": "No pudimos armar este. Intenta con otra canción.",
-      "empty.error.h1": "Hmm.",
-      "empty.error.p": "No se pudo alcanzar el servicio de buceo profundo. Intenta de nuevo en un momento.",
-      "status.notConnected": "no conectado",
+      "btn.dive": "A fondo",
+      "btn.logout": "Cerrar sesión",
+      "search.placeholder": "O busca una canción y nos vamos a fondo…",
+      "empty.welcome.h1": "Ponte geek con la música que amas.",
+      "empty.welcome.p": "Conecta Spotify (o busca una canción) y te contamos su historia: quién la hizo, de dónde viene y con qué se conecta.",
+      "empty.noResults.h1": "Todavía no tenemos esta historia",
+      "empty.noResults.p": "Esta se nos escapó. Prueba con otra canción.",
+      "empty.error.h1": "Uy.",
+      "empty.error.p": "No pudimos traer la historia ahora. Dale otra oportunidad en un momentito.",
+      "status.notConnected": "sin conectar",
       "status.connected": "conectado",
-      "status.enriching": "enriqueciendo con IA…",
+      "status.enriching": "afinando con IA…",
       "status.ready": "listo",
-      "state.playing": "▶ reproduciendo",
-      "state.paused": "❚❚ pausado",
+      "state.playing": "▶ sonando",
+      "state.paused": "❚❚ en pausa",
       "skeleton.kicker": "cargando",
-      "skeleton.title": "Reuniendo la historia…",
-      "skeleton.body": "un momento",
+      "skeleton.title": "Armando la historia…",
+      "skeleton.body": "un momentito",
       "version": "Geeek · v"
     }
   };

@@ -25,5 +25,6 @@ window.SDD_CONFIG = {
   // 2.4: added the "geeek deeper" second-layer story (button + /api/deeper).
   // 2.5: deeper story is complementary to the top story + "Similar songs" (2 real Spotify links).
   // 2.6: single-source Spanish story (render ES from the verified English) + band-composition accuracy guardrails.
-  VERSION: "2.6"
+  // 2.7: native-Spanish voice (CEdO): warm LatAm es-419 UI strings + stories written natively (not mirrored from English); invalidates local card cache so old robotic-Spanish stories refresh.
+  VERSION: "2.7"
 };

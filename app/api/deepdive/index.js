@@ -190,7 +190,7 @@ function factsBlock(f) {
 
 async function writeCardsWithClaude(apiKey, f, context, lang) {
   const langRule = (lang === "es")
-    ? " WRITE IN SPANISH (critical): compose EVERY JSON string VALUE in natural, native Latin American Spanish \u2014 a neutral pan-Latin-American register, NOT from Spain and NOT machine-translated. Keep the same warm, curious, vivid voice; write as a bilingual native music journalist would: idiomatic, flowing, grammatically correct. Keep song titles, album names, band/artist names and people's names in their ORIGINAL language; do not translate proper nouns and do not mix in stray English. Keep the JSON KEYS exactly as specified (in English); only the VALUES are in Spanish."
+    ? " WRITE IN SPANISH (critical): compose EVERY JSON string VALUE natively in warm Latin American Spanish \u2014 neutral pan-LatAm register (t\u00fa, never vosotros), NOT from Spain, NOT machine-translated. Write like a Latin American music lover telling a close friend: short sentences with Spanish rhythm, simple everyday words, warm and alive; light natural enthusiasm where it fits (\u00a1qu\u00e9 temazo!); NEVER stiff textbook connectors (no obstante, asimismo), NEVER anglicisms or calques. Keep song titles, album names, band/artist names and people's names in their ORIGINAL language; do not translate proper nouns and do not mix in stray English. Keep the JSON KEYS exactly as specified (in English); only the VALUES are in Spanish."
     : "";
   const system =
     "You are a warm, knowledgeable music writer creating short 'deep dive' cards for someone who is listening to this song right now. " +
@@ -293,16 +293,17 @@ async function getFacts(key, q, context) {
 }
 
 // Render the canonical ENGLISH deep dive natively into Latin American Spanish WITHOUT changing any fact.
-// Single source of truth: the English is generated + fact-checked once; Spanish is a faithful re-authoring
-// of it, so the two languages can never diverge on names, dates, credits or band composition.
+// Single source of truth: the English is generated + fact-checked once; the Spanish keeps every fact pinned
+// to it \u2014 but the PROSE is written natively (CEdO voice system 2026-07-07), never mirrored sentence-by-sentence,
+// so it reads like it was written in Spanish from the start.
 async function localizeCardsSpanish(apiKey, enPayload, context) {
   if (!apiKey || !enPayload || !enPayload.story || !enPayload.story.headline) return null;
   const inBlock = { story: enPayload.story, cards: enPayload.cards || [] };
   const system =
-    "You are a native Latin American Spanish music writer. You receive an English song 'deep dive' (a story plus cards) as JSON. " +
-    "Re-express it in natural, idiomatic, NEUTRAL Latin American Spanish (NOT from Spain, NOT machine-translated), with EXACTLY the same warm, curious, vivid voice, the same meaning, and the same structure. " +
-    "This is a faithful re-authoring, NOT a loose paraphrase: do not add, drop, soften or change any fact \u2014 especially names, dates, credits, numbers, band size, and who wrote/played/produced. If the English says a specific person wrote the song, the Spanish must say the same; never introduce extra people or imply a larger group than the English states. " +
-    "Keep song titles, album names, band/artist and people's names in their ORIGINAL language. Do not reproduce lyrics. Keep the SAME JSON shape and the SAME array lengths/order. Output STRICT JSON only, no markdown.";
+    "You are a Latin American music writer telling a close friend about a song. You receive an English song 'deep dive' (a story plus cards) as JSON \u2014 treat it as your FACTS SOURCE, not as text to translate. " +
+    "VOICE (this is the whole point): re-tell each block natively in warm Latin American Spanish \u2014 t\u00fa, short sentences with Spanish rhythm and cadence, simple everyday words, alive. Do NOT mirror the English sentence structure, length or word order; within each block, re-compose the prose from scratch in Spanish while keeping its meaning and every fact identical. Natural music-fan warmth is welcome where it truly fits (\u00a1qu\u00e9 temazo!, \u201cesta rola\u201d-level familiarity sparingly); NEVER stiff textbook connectors (no obstante, asimismo), NEVER anglicisms or calques (never \u2018la historia detr\u00e1s\u2019), NEVER Spain-isms (no vosotros), NEVER machine-translation flavor. The reader must never suspect an English original exists. " +
+    "FACTS (non-negotiable): do not add, drop, soften or change any fact \u2014 especially names, dates, credits, numbers, band size, and who wrote/played/produced. If the English says a specific person wrote the song, the Spanish must say the same; never introduce extra people or imply a larger group than the English states. " +
+    "Keep song titles, album names, band/artist and people's names in their ORIGINAL language. Do not reproduce lyrics. Keep the SAME JSON shape and the SAME array lengths/order (blocks and cards map 1:1; only the prose inside each is freely re-written). Output STRICT JSON only, no markdown.";
   const user =
     "English deep dive to render fully in Spanish (same facts, same structure):\n" + JSON.stringify(inBlock) + "\n\n" +
     "Return STRICT JSON exactly: {\"story\":{\"headline\":\"...\",\"dek\":\"...\",\"body\":[{\"type\":\"p|quote\",\"text\":\"...\"}]},\"cards\":[{\"kicker\":\"...\",\"title\":\"...\",\"body\":\"...\",\"extra\":\"...\"}]}. Same number of body blocks and cards, same order. Only the values are Spanish.";
@@ -405,7 +406,7 @@ module.exports = async function (context, req) {
   const key = cacheKey(q);
   const lang = (req.query && req.query.lang === "es") ? "es" : "en";
   const memKey = lang === "es" ? key + "|es" : key;                 // in-memory cache is per-language
-  const skey = "sdd:" + VERSION + (lang === "es" ? ":es:" : ":") + key; // shared-cache key (versioned, per-language)
+  const skey = "sdd:" + VERSION + (lang === "es" ? ":es2:" : ":") + key; // shared-cache key (versioned, per-language; es2 = 2026-07-07 native-Spanish voice — old :es: entries orphaned so Spanish regenerates from the cached English canonical)
 
   // A finished (AI or final) payload always wins — instant.
   if (cache.has(memKey)) {
