@@ -22,7 +22,7 @@ const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "2.2"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "2.3"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -289,7 +289,7 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     "HEADINGS: Use ONLY these section headings, verbatim: The song, The album, The era, Producer & engineer. Do NOT invent other headings (covers are handled separately, below). Never address data, sources, lookups, uncertainty or discrepancies — if unsure, silently omit.\n\n" +
     "SIMILAR SONGS (recos): Also pick FIVE candidate songs for discovery (the app shows only ones a listener can actually find on Spotify, best two). Rules: (1) EVERY pick is by a DIFFERENT artist than this song's artist AND different from each other — no repeats; (2) NOT from the same album, and NEVER a cover, remix, live version, re-recording or alternate version of THIS same song — recommend genuinely DIFFERENT songs; (3) gravitate to OTHER artists to help the listener discover new acts; (4) each must genuinely match this song's vibe — groove, era, tempo/beat, rhythm, energy and overall feel; (5) each needs a short complete one-line 'why' (<= 16 words) naming the shared musical quality. If a CANDIDATES list is given (real co-listening data), STRONGLY prefer picks from it. CRITICAL: only recommend songs you are highly confident actually exist and are correctly credited to that EXACT artist — never invent a song or mis-attribute a title to the wrong artist. When unsure, choose a more famous, safely-attributed song by a fitting artist that a listener can definitely find on Spotify.\n\n" +
     "COVERS: Separately, list up to FOUR of the MOST FAMOUS real cover versions of THIS song, by OTHER artists (never the original artist). A cover means the SAME COMPOSITION re-recorded by a different act \u2014 NOT a different song that merely shares the title; if you are not certain it is literally the same song (same writers, melody and lyrics), OMIT it. For each: the cover artist, the song title as they released it, and a 1-2 sentence story about that specific cover (what makes it notable — a hit, a reinvention, a famous live performance). Only real, well-known covers you are confident exist and are correctly attributed; if none are truly famous, return an empty covers array. Never invent a cover.\n\n" +
-    "ORIGINAL vs COVER (critical): the performing artist is named in Facts. If that performing artist is NOT the original recording artist (this playing version is itself a cover), set the original field to the ORIGINAL version as an object {artist, title, story} where story is 1-2 sentences on the original / first definitive recording. If the performing artist IS the original, set original to null. When original is set: the COVERS list must EXCLUDE both the performing artist and the original artist (list only OTHER covers), and write the whole piece as an INTERPRETATION that credits the original songwriter/artist, focuses on what THIS version changes, and NEVER implies the performing artist wrote the song.\n\n" +
+    "ORIGINAL vs COVER (critical, ALWAYS decide this): compare the performing artist in Facts to the Writer(s) and use your own knowledge. Decide whether the performing artist\u2019s version is the ORIGINAL recording or a COVER of an earlier act. If it is a COVER (the performing artist did not originate the song \u2014 e.g. \u201cAll Along the Watchtower\u201d by Jimi Hendrix or U2 is a cover of Bob Dylan\u2019s original; \u201cHurt\u201d by Johnny Cash is a cover of Nine Inch Nails), you MUST set the original field to the ORIGINAL recording ACT (the act that first recorded it, using the act\u2019s name such as \u201cThe Beatles\u201d, NOT an individual songwriter name), with a 1-2 sentence story. If the performing artist IS the original, set original to null. When original is set: EXCLUDE both the performing artist and the original act from COVERS, and frame the whole piece as an interpretation that credits the original and focuses on what THIS version changes; never imply the performing artist wrote the song.\n\n" +
     "Output STRICT JSON only — no prose, no markdown fences.";
   const user =
     `Facts:\n${factsBlock(f)}\n\n` +
@@ -529,6 +529,15 @@ module.exports = async function (context, req) {
   if (deeper && deeper.original && deeper.original.artist) {
     const okOrig = await isGenuineCover(deeper.original.artist, deeper.original.title, facts.workId);
     if (!okOrig) deeper.original = null;
+  }
+  // Deterministic fallback: if the AI missed it but the Writer is a DIFFERENT act who actually recorded this
+  // work (a singer-songwriter original, e.g. Dylan/Cohen), treat THIS as a cover and name the writer as the original.
+  if (deeper && !deeper.original && facts.workId && facts.writers && facts.artist) {
+    const wr = primaryArtist(facts.writers);
+    const perf = norm(primaryArtist(facts.artist));
+    if (wr && norm(wr) !== perf && norm(facts.writers).indexOf(perf) === -1) {
+      if (await isGenuineCover(wr, facts.title, facts.workId)) deeper.original = { artist: wr, title: facts.title, story: "" };
+    }
   }
   if (deeper && Array.isArray(deeper.covers) && deeper.covers.length) {
     deeper.covers = await verifyCovers(deeper.covers, facts.workId); // keep only genuine same-work covers
