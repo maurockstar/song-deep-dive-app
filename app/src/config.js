@@ -24,5 +24,6 @@ window.SDD_CONFIG = {
   // 2.3: fixed broken lead photo (Wikipedia /thumb/ filename) + hide media tiles whose image 404s.
   // 2.4: added the "geeek deeper" second-layer story (button + /api/deeper).
   // 2.5: deeper story is complementary to the top story + "Similar songs" (2 real Spotify links).
-  VERSION: "2.5"
+  // 2.6: single-source Spanish story (render ES from the verified English) + band-composition accuracy guardrails.
+  VERSION: "2.6"
 };

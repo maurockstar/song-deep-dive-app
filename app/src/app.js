@@ -636,6 +636,14 @@
       if (mine !== loadSeq) return;
       if (curTab === "cards") renderCards(data);
       if (isAi(data)) cacheSet(track, data);
+      // Warm the OTHER language's story in the background so a language switch is instant (the server writes
+      // English once and renders Spanish from it; this pre-triggers + caches that other language).
+      var _oL = STORY_LANG === "es" ? "en" : "es";
+      var _spk = trackKey(track) + "|story|" + _oL;
+      if (!prefetchedDeeper[_spk]) {
+        prefetchedDeeper[_spk] = 1;
+        fetch(CFG.API_BASE + "/deepdive?" + new URLSearchParams({ id: track.id || "", title: track.title || "", artist: track.artist || "", lang: _oL }).toString()).catch(function () {});
+      }
     } catch (e) {
       if (mine !== loadSeq) return;
       if (curTab === "cards") notePanel(L("loadErr"));
