@@ -150,13 +150,13 @@
       adding:"Adding to your queue\u2026", added:"Added to your Spotify queue \u2014 plays next \u2713", pressPlay:"Press play on Spotify first, then tap to queue.", opening:"Opening in Spotify\u2026",
       noStory:"No deep dive for this one yet \u2014 try another song.", loadErr:"Couldn\u2019t load the deep dive right now. Try again in a moment." },
     es: { story:"La historia", deeper:"geeek a fondo", showLess:"ver menos", digging:"Profundizando\u2026",
-      deeperSoon:"Pronto va a haber m\u00e1s sobre esta canci\u00f3n.", deeperErr:"No se pudo cargar la versi\u00f3n a fondo en este momento.",
-      similar:"Canciones similares", queueNote:"Toc\u00e1 para agregar a tu cola de Spotify \u2014 suena a continuaci\u00f3n.",
+      deeperSoon:"Pronto habr\u00e1 m\u00e1s sobre esta canci\u00f3n.", deeperErr:"No se pudo cargar la versi\u00f3n a fondo en este momento.",
+      similar:"Canciones similares", queueNote:"Toca para agregar a tu cola de Spotify \u2014 suena a continuaci\u00f3n.",
       related:"Canciones relacionadas", coverLead:"Esta versi\u00f3n es un cover", coverOrig:" \u2014 este es el original", coverAnd:" y otras versiones:", coverColon:":", coverDot:".",
       theOriginal:"El original", otherCovers:"Otras versiones",
-      official:"Video oficial", findVideo:"Busc\u00e1 el video oficial en ", watchVideo:"Mir\u00e1 el video oficial en ",
-      adding:"Agregando a tu cola\u2026", added:"Agregada a tu cola de Spotify \u2014 suena a continuaci\u00f3n \u2713", pressPlay:"Dale play en Spotify primero y despu\u00e9s toc\u00e1 para encolar.", opening:"Abriendo en Spotify\u2026",
-      noStory:"Todav\u00eda no hay deep dive para esta \u2014 prob\u00e1 con otra canci\u00f3n.", loadErr:"No se pudo cargar el deep dive ahora. Prob\u00e1 de nuevo en un momento." }
+      official:"Video oficial", findVideo:"Busca el video oficial en ", watchVideo:"Mira el video oficial en ",
+      adding:"Agregando a tu cola\u2026", added:"Agregada a tu cola de Spotify \u2014 suena a continuaci\u00f3n \u2713", pressPlay:"Reproduce en Spotify primero y luego toca para agregarla a la cola.", opening:"Abriendo en Spotify\u2026",
+      noStory:"Todav\u00eda no hay deep dive para esta \u2014 prueba con otra canci\u00f3n.", loadErr:"No se pudo cargar el deep dive ahora. Intenta de nuevo en un momento." }
   };
   function L(k) { var d = STORY_STRINGS[STORY_LANG] || STORY_STRINGS.en; return (d[k] != null ? d[k] : (STORY_STRINGS.en[k] || "")); }
   function setStoryLang(lang) {
