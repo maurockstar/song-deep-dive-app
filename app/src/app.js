@@ -508,7 +508,7 @@
   function renderSimilarSongs(wrap, recos) {
     if (!wrap || !recos || !recos.length) return;
     var sec = document.createElement("div"); sec.className = "st-recos"; wrap.appendChild(sec); // append now so the story photo can anchor above it
-    resolveCandidates(recos, 3).then(function (matched) {
+    resolveCandidates(recos, 5).then(function (matched) {
       if (!matched.length) { if (sec.parentNode) sec.parentNode.removeChild(sec); return; }
       var h = document.createElement("h3"); h.className = "st-dh st-recos-h"; h.textContent = L("similar"); sec.appendChild(h);
       var note = document.createElement("p"); note.className = "st-recos-note"; note.textContent = L("queueNote"); sec.appendChild(note);

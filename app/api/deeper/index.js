@@ -22,7 +22,7 @@ const LASTFM = "https://ws.audioscrobbler.com/2.0/";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 
-const VERSION = "2.6"; // bump to invalidate the deeper shared cache when this prompt/shape changes
+const VERSION = "2.7"; // bump to invalidate the deeper shared cache when this prompt/shape changes
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const LASTFM_KEY = process.env.LASTFM_API_KEY; // optional — free key enables real co-listening candidates
@@ -319,7 +319,7 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     "COMPLEMENTARITY (critical): The reader has ALREADY read the short story provided as ALREADY-TOLD. Your job is to ADD NEW knowledge and angles they have NOT read yet. Do NOT restate the facts, phrasing, or anecdotes in ALREADY-TOLD. You may briefly reference something from it ONLY if strictly necessary as a bridge. Going deeper means new information, not a re-tell.\n\n" +
     "NO ENCYCLOPEDIC RE-INTRODUCTION (critical): Never open a section with a dictionary or Wikipedia-style definition, and do NOT restate who the artist is, the release date, record label, or chart positions as if introducing them for the first time \u2014 the reader already knows the basics. Continue with fresh, flowing prose that goes DEEPER (craft, sound, meaning, context, legacy). The Wikipedia extracts in Facts are for factual accuracy ONLY \u2014 NEVER copy or paraphrase their wording.\n\n" +
     "HEADINGS: Use ONLY these section headings, verbatim: The song, The album, The era, Producer & engineer. Do NOT invent other headings (covers are handled separately, below). Never address data, sources, lookups, uncertainty or discrepancies — if unsure, silently omit.\n\n" +
-    "SIMILAR SONGS (recos): Also pick FIVE candidate songs for discovery (the app shows only ones a listener can actually find on Spotify, best two). Rules: (1) EVERY pick is by a DIFFERENT artist than this song's artist AND different from each other — no repeats; (2) NOT from the same album, and NEVER a cover, remix, live version, re-recording or alternate version of THIS same song — recommend genuinely DIFFERENT songs; (3) gravitate to OTHER artists to help the listener discover new acts; (4) MUSICAL KINSHIP ONLY — each pick must share real musical DNA with THIS song: genre/subgenre, scene or movement, era, instrumentation, groove, tempo and sonic aesthetic. FORBIDDEN: recommending a song merely because it shares the same LANGUAGE, NATIONALITY or REGION as this artist — 'both are Latin American', 'both Spanish-language' or 'same country' are NOT valid reasons. If the only link you can find is language/nationality/region, DO NOT include it. If you catch yourself justifying a pick with 'despite a different genre/subgenre/style' or 'even though', DROP it — it is not similar enough. Prefer FEWER, truly-similar songs over padding the list with loosely-related big names; (5) each needs a short complete one-line 'why' (<= 16 words) naming the shared musical quality. If a CANDIDATES list is given (real co-listening data), STRONGLY prefer picks from it. CRITICAL: only recommend songs you are highly confident actually exist and are correctly credited to that EXACT artist — never invent a song or mis-attribute a title to the wrong artist. When unsure, choose a more famous, safely-attributed song by a fitting artist that a listener can definitely find on Spotify.\n\n" +
+    "SIMILAR SONGS (recos): Also pick TEN candidate songs for discovery, ordered MOST-SIMILAR FIRST (the app shows the best FIVE that resolve on Spotify, so give a deep enough pool that at least five are easy to find). Rules: (1) EVERY pick is by a DIFFERENT artist than this song's artist AND different from each other — no repeats; (2) NOT from the same album, and NEVER a cover, remix, live version, re-recording or alternate version of THIS same song — recommend genuinely DIFFERENT songs; (3) gravitate to OTHER artists to help the listener discover new acts; (4) MUSICAL KINSHIP ONLY — each pick must share real musical DNA with THIS song: genre/subgenre, scene or movement, era, instrumentation, groove, tempo and sonic aesthetic. FORBIDDEN: recommending a song merely because it shares the same LANGUAGE, NATIONALITY or REGION as this artist — 'both are Latin American', 'both Spanish-language' or 'same country' are NOT valid reasons. If the only link you can find is language/nationality/region, DO NOT include it. If you catch yourself justifying a pick with 'despite a different genre/subgenre/style' or 'even though', DROP it — it is not similar enough. Aim for a FULL set of genuinely similar songs so the app can always show five; keep the kinship bar high — if truly-similar tracks run short, widen to the same scene/era/adjacent sound and instrumentation, but NEVER pad with mere shared language/region or unrelated big names; (5) each needs a short complete one-line 'why' (<= 16 words) naming the shared musical quality. If a CANDIDATES list is given (real co-listening data), STRONGLY prefer picks from it. CRITICAL: only recommend songs you are highly confident actually exist and are correctly credited to that EXACT artist — never invent a song or mis-attribute a title to the wrong artist. When unsure, choose a more famous, safely-attributed song by a fitting artist that a listener can definitely find on Spotify.\n\n" +
     "COVERS: Separately, list up to FOUR of the MOST FAMOUS real cover versions of THIS song, by OTHER artists (never the original artist). A cover means the SAME COMPOSITION re-recorded by a different act \u2014 NOT a different song that merely shares the title; if you are not certain it is literally the same song (same writers, melody and lyrics), OMIT it. For each: the cover artist, the song title as they released it, and a 1-2 sentence story about that specific cover (what makes it notable — a hit, a reinvention, a famous live performance). Only real, well-known covers you are confident exist and are correctly attributed; if none are truly famous, return an empty covers array. Never invent a cover.\n\n" +
     "ORIGINAL vs COVER (critical, ALWAYS decide this): compare the performing artist in Facts to the Writer(s) and use your own knowledge. Decide whether the performing artist\u2019s version is the ORIGINAL recording or a COVER of an earlier act. If it is a COVER (the performing artist did not originate the song \u2014 e.g. \u201cAll Along the Watchtower\u201d by Jimi Hendrix or U2 is a cover of Bob Dylan\u2019s original; \u201cHurt\u201d by Johnny Cash is a cover of Nine Inch Nails), you MUST set the original field to the ORIGINAL recording ACT (the act that first recorded it, using the act\u2019s name such as \u201cThe Beatles\u201d, NOT an individual songwriter name), with a 1-2 sentence story. If the performing artist IS the original, set original to null. When original is set: EXCLUDE both the performing artist and the original act from COVERS, and frame the whole piece as an interpretation that credits the original and focuses on what THIS version changes; never imply the performing artist wrote the song.\n\n" +
     "Output STRICT JSON only — no prose, no markdown fences.";
@@ -340,10 +340,15 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     `],` +
     `"recos":[` +
     `{"title":"song title","artist":"a DIFFERENT artist","why":"short complete line: the shared groove/era/beat/feel"},` +
-    `{"title":"song title","artist":"another DIFFERENT artist","why":"short complete line: the shared quality"},` +
-    `{"title":"song title","artist":"a third DIFFERENT artist","why":"short complete line: the shared quality"},` +
-    `{"title":"song title","artist":"a fourth DIFFERENT artist","why":"short complete line: the shared quality"},` +
-    `{"title":"song title","artist":"a fifth DIFFERENT artist","why":"short complete line: the shared quality"}` +
+    `{"title":"song title","artist":"a 2nd DIFFERENT artist","why":"short complete line: the shared quality"},` +
+    `{"title":"song title","artist":"a 3rd DIFFERENT artist","why":"short complete line: the shared quality"},` +
+    `{"title":"song title","artist":"a 4th DIFFERENT artist","why":"short complete line: the shared quality"},` +
+    `{"title":"song title","artist":"a 5th DIFFERENT artist","why":"short complete line: the shared quality"},` +
+    `{"title":"song title","artist":"a 6th DIFFERENT artist","why":"short complete line: the shared quality"},` +
+    `{"title":"song title","artist":"a 7th DIFFERENT artist","why":"short complete line: the shared quality"},` +
+    `{"title":"song title","artist":"an 8th DIFFERENT artist","why":"short complete line: the shared quality"},` +
+    `{"title":"song title","artist":"a 9th DIFFERENT artist","why":"short complete line: the shared quality"},` +
+    `{"title":"song title","artist":"a 10th DIFFERENT artist","why":"short complete line: the shared quality"}` +
     `],` +
     `"covers":[` +
     `{"artist":"famous cover artist","title":"the song title as they released it","story":"1-2 sentences on why this cover is notable"},` +
@@ -353,7 +358,7 @@ async function writeDeeperWithClaude(apiKey, f, seed, similarPool, context) {
     `],` +
     `"original":{"artist":"the ORIGINAL recording artist, or null if THIS performing version IS the original","title":"the original song title","story":"1-2 sentences on the original / first definitive recording"}` +
     `}}`;
-  const body = { model: ANTHROPIC_MODEL, max_tokens: 2000, system, messages: [{ role: "user", content: user }] };
+  const body = { model: ANTHROPIC_MODEL, max_tokens: 2600, system, messages: [{ role: "user", content: user }] };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 30000);
   try {
@@ -441,7 +446,7 @@ function cleanRecos(arr, songArtist) {
     seen[k] = 1; seen["artist:" + na] = 1;
     out.push({ title: String(r.title).trim(), artist: String(r.artist).trim(), why: clipWhy(r.why) });
   });
-  return out.slice(0, 5);
+  return out.slice(0, 10);
 }
 
 // Validate covers: up to 2 famous covers of THIS song, by OTHER artists, each with a short story.
@@ -587,7 +592,7 @@ async function localizeDeeperSpanish(apiKey, enDeeper, seed, context) {
     "English deeper to render fully in Spanish:\n" + JSON.stringify(inBlock) + "\n\n" +
     "Return STRICT JSON exactly in this shape: {\"body\":[{\"type\":\"h|p|quote\",\"text\":\"...\"}],\"recos\":[{\"why\":\"...\"}],\"covers\":[{\"story\":\"...\"}],\"original\":{\"story\":\"...\"}}. " +
     "recos and covers MUST have the same number of items and the same order as the input; original is null if the input original is null. Only the values are Spanish.";
-  const body = { model: ANTHROPIC_MODEL, max_tokens: 2000, system: system, messages: [{ role: "user", content: user }] };
+  const body = { model: ANTHROPIC_MODEL, max_tokens: 2600, system: system, messages: [{ role: "user", content: user }] };
   const ctrl = new AbortController();
   const timer = setTimeout(function () { ctrl.abort(); }, 30000);
   try {
