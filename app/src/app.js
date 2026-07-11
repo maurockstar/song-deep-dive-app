@@ -868,10 +868,64 @@
       + '<div class="la">' + action + '</div></div>';
   }
   function renderSongs() {
-    panel.innerHTML = '<div style="text-align:right;margin:-6px 0 4px"><span class="preview-chip">preview</span></div>'
-      + demoRow("linear-gradient(180deg,#FFC64B,#FF8A4D)", "Somebody to Love", "Queen · 1976", "Explore →")
-      + demoRow("linear-gradient(180deg,#FF9F4D,#FF5A3C)", "November Rain", "Guns N’ Roses · 1991", "Explore →")
-      + demoRow("linear-gradient(180deg,#FFB14D,#FF7A4D)", "Life on Mars?", "David Bowie · 1971", "Explore →");
+    var t = cur;
+    if (!t || !t.title) { notePanel("Play or search a song to see songs with the same DNA."); return; }
+    panel.innerHTML = '<div class="soon"><p>Finding songs with the same DNA…</p></div>';
+    var myKey = trackKey(t);
+    var S = window.SDD && window.SDD.spotify;
+    fetch(CFG.API_BASE + "/deeper", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: t.title || "", artist: t.artist || "", album: t.album || "" }) })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (curTab !== "songs" || trackKey(cur) !== myKey) return;
+        var recos = ((d && d.deeper && d.deeper.recos) || []).slice(0, 5); // top 5, most-similar first
+        if (!recos.length) { notePanel("No songs with the same DNA for this one yet."); return; }
+        Promise.all(recos.map(function (c) {
+          if (!(S && S.resolveTrack)) return Promise.resolve({ cand: c, track: null });
+          return S.resolveTrack(c.title, c.artist).then(function (tr) { return { cand: c, track: tr }; }, function () { return { cand: c, track: null }; });
+        })).then(function (rows) {
+          if (curTab !== "songs" || trackKey(cur) !== myKey) return;
+          panel.innerHTML = "";
+          var head = document.createElement("div"); head.className = "songs-head";
+          head.innerHTML = '<div class="songs-title">Songs with the same DNA</div><div class="songs-note">Tap to add to your Spotify queue — or Explore its story.</div>';
+          panel.appendChild(head);
+          rows.forEach(function (m) { panel.appendChild(buildSongRow(m.cand, m.track)); });
+        });
+      })
+      .catch(function () { if (curTab === "songs") notePanel("Couldn’t load songs right now. Try again in a moment."); });
+  }
+  // One "same-DNA" row: tap the row to queue it on Spotify; "Explore" opens its own deep dive.
+  function attachSongQueue(el, track, status, fallbackUrl) {
+    var S = window.SDD && window.SDD.spotify;
+    function setStatus(m) { if (status) status.textContent = m; }
+    el.addEventListener("click", function () {
+      if (el.classList.contains("reco-queued") || el.classList.contains("reco-busy")) return;
+      if (!(S && S.queueUri && track && track.uri)) { window.open(fallbackUrl, "_blank", "noopener"); return; }
+      el.classList.add("reco-busy"); setStatus(L("adding"));
+      S.queueUri(track.uri).then(function (r) {
+        el.classList.remove("reco-busy");
+        if (r && r.ok) { el.classList.add("reco-queued"); setStatus(L("added")); }
+        else if (r && r.reason === "no-device") { setStatus(L("pressPlay")); }
+        else { window.open(fallbackUrl, "_blank", "noopener"); setStatus(L("opening")); }
+      });
+    });
+  }
+  function buildSongRow(cand, track) {
+    var art = (track && track.art) || "";
+    var av = art
+      ? '<div class="av" style="background-image:url(\'' + esc(art) + '\');background-size:cover;background-position:center"></div>'
+      : '<div class="av" style="background:linear-gradient(180deg,var(--sun-300),var(--sun-500))"></div>';
+    var fallbackUrl = (track && track.url) || ("https://open.spotify.com/search/" + encodeURIComponent(((cand.title || "") + " " + (cand.artist || "")).trim()));
+    var row = document.createElement("div"); row.className = "lrow song-row";
+    row.innerHTML = av
+      + '<div class="song-main" role="button" tabindex="0" style="flex:1;min-width:0;cursor:pointer">'
+      +   '<div class="lt">' + esc(cand.title || "") + '</div>'
+      +   '<div class="ls">' + esc(cand.artist || "") + (cand.why ? ' · ' + esc(cand.why) : "") + '</div>'
+      +   '<div class="song-status" aria-live="polite"></div>'
+      + '</div>'
+      + '<div class="la"><button class="song-explore" type="button">Explore →</button></div>';
+    attachSongQueue(row.querySelector(".song-main"), track, row.querySelector(".song-status"), fallbackUrl);
+    row.querySelector(".song-explore").addEventListener("click", function (e) { e.stopPropagation(); diveWith(cand.title, cand.artist, (track && track.art) || ""); });
+    return row;
   }
   function renderArtists() {
     panel.innerHTML = '<div style="text-align:right;margin:-6px 0 4px"><span class="preview-chip">preview</span></div>'
@@ -977,6 +1031,7 @@
         playing = !!track.isPlaying; setPlayIcon(playing); tickProgress();
         setHero(track); updateShareLink(track); updateLightboxLive(track);
         if (curTab === "cards") loadDeepDive(track);
+        else if (curTab === "songs") renderSongs();
       } else if (!manualMode) {
         if (track) {
           pstate = { progressMs: track.progressMs || 0, durationMs: track.durationMs || 0, playing: !!track.isPlaying, at: Date.now() };
